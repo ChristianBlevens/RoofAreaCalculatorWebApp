@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roof Area Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .options {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+        #mainCanvas {
+            border: 1px solid #ccc;
+            display: none;
+        }
+        #roofOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        #resultArea {
+            margin-top: 20px;
+            display: none;
+            padding: 15px;
+            background-color: #f1f8e9;
+            border-radius: 4px;
+        }
+        #locationInput {
+            padding: 10px;
+            width: 300px;
+            display: none;
+        }
+        #submitLocation {
+            display: none;
+        }
+        #loadingIndicator {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        #imageContainer {
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Roof Area Calculator</h1>
+        
+        <div id="locationControls">
+            <h2>Select a location method</h2>
+            <div class="options">
+                <button id="useLocation">Use My Location</button>
+                <button id="enterLocation">Enter Location</button>
+            </div>
+            
+            <div>
+                <input type="text" id="locationInput" placeholder="Enter address or coordinates">
+                <button id="submitLocation">Submit</button>
+            </div>
+        </div>
+        
+        <div id="loadingIndicator">
+            <p>Loading satellite imagery...</p>
+        </div>
+        
+        <div id="imageContainer">
+            <canvas id="mainCanvas" width="800" height="500"></canvas>
+            <canvas id="roofOverlay"></canvas>
+        </div>
+        
+        <div id="resultArea">
+            <h3>Results</h3>
+            <p id="areaResult"></p>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const useLocationBtn = document.getElementById('useLocation');
+        const enterLocationBtn = document.getElementById('enterLocation');
+        const locationInput = document.getElementById('locationInput');
+        const submitLocationBtn = document.getElementById('submitLocation');
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const roofOverlay = document.getElementById('roofOverlay');
+        const resultArea = document.getElementById('resultArea');
+        const areaResult = document.getElementById('areaResult');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        // Constants
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 500;
+        
+        // Variables
+        let filledPixels = [];
+        let isSetup = false;
+
+        // Event Listeners
+        useLocationBtn.addEventListener('click', () => {
+            startImageLoading();
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => loadImageFromCoordinates(position.coords.latitude, position.coords.longitude),
+                    error => {
+                        console.error("Geolocation error:", error.message);
+                        loadImageFromFile();
+                    }
+                );
+            } else {
+                console.log("Geolocation not supported");
+                loadImageFromFile();
+            }
+        });
+
+        enterLocationBtn.addEventListener('click', () => {
+            locationInput.style.display = 'inline-block';
+            submitLocationBtn.style.display = 'inline-block';
+        });
+
+        submitLocationBtn.addEventListener('click', () => {
+            const location = locationInput.value;
+            if (location.trim() === '') {
+                alert('Please enter a location');
+                return;
+            }
+            
+            startImageLoading();
+            // Here we would normally geocode the address to get coordinates
+            // For demo purposes, we'll skip directly to loading the image
+            loadImageFromFile();
+        });
+
+        // Setup functions - called once to initialize
+        function setupApplication() {
+            if (isSetup) return;
+            
+            setupRoofOverlay();
+            canvas.addEventListener('click', handleImageClick);
+            canvas.style.display = 'block';
+            loadingIndicator.style.display = 'none';
+            isSetup = true;
+        }
+
+        function setupRoofOverlay() {
+            roofOverlay.width = CANVAS_WIDTH;
+            roofOverlay.height = CANVAS_HEIGHT;
+            roofOverlay.style.top = canvas.offsetTop + 'px';
+            roofOverlay.style.left = canvas.offsetLeft + 'px';
+        }
+
+        // Loading indicator functions
+        function startImageLoading() {
+            loadingIndicator.style.display = 'block';
+            canvas.style.display = 'none';
+            resultArea.style.display = 'none';
+        }
+
+        // Core image loading functions - unified approach with fallbacks
+        function loadImageFromCoordinates(latitude, longitude) {
+            try {
+                // First attempt: Try to get a map image from coordinates
+                const mapUrl = getMapImageUrl(latitude, longitude);
+                loadImageFromUrl(mapUrl);
+            } catch (error) {
+                console.error("Error loading map:", error);
+                loadImageFromFile();
+            }
+        }
+
+        function getMapImageUrl(lat, lng) {
+            // In a real app, generate a URL from a maps API
+            return "https://via.placeholder.com/800x500?text=Map+Unavailable";
+        }
+
+        function loadImageFromFile() {
+            // Second attempt: Try to load a local test image
+            const testImage = new Image();
+            testImage.src = "testimage.webp";
+            
+            testImage.onload = () => {
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                ctx.drawImage(testImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                setupApplication();
+            };
+            
+            testImage.onerror = () => {
+                console.error("Failed to load test image, generating fallback image");
+                generateTestImage();
+            };
+        }
+
+        function loadImageFromUrl(url) {
+            const image = new Image();
+            image.crossOrigin = "anonymous";
+            
+            image.onload = () => {
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                ctx.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                setupApplication();
+            };
+            
+            image.onerror = () => {
+                console.error("Failed to load image from URL");
+                loadImageFromFile();
+            };
+            
+            image.src = url;
+        }
+
+        // Final fallback: Generate a test image programmatically
+        function generateTestImage() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Background
+            ctx.fillStyle = '#a8e6a8';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Roof shape
+            ctx.fillStyle = '#8B4513';
+            ctx.beginPath();
+            ctx.moveTo(300, 150);
+            ctx.lineTo(500, 150);
+            ctx.lineTo(530, 200);
+            ctx.lineTo(480, 250);
+            ctx.lineTo(320, 250);
+            ctx.lineTo(270, 200);
+            ctx.closePath();
+            ctx.fill();
+
+            // Roof texture
+            ctx.fillStyle = '#7D3C12';
+            ctx.fillRect(350, 180, 100, 30);
+
+            // Random texture variations
+            for (let i = 0; i < 20; i++) {
+                const x = 300 + Math.random() * 200;
+                const y = 150 + Math.random() * 100;
+                const size = 5 + Math.random() * 10;
+                ctx.fillStyle = `rgba(${100 + Math.random() * 50}, ${30 + Math.random() * 20}, ${10 + Math.random() * 15}, 0.5)`;
+                ctx.fillRect(x, y, size, size);
+            }
+
+            // Additional elements
+            ctx.fillStyle = '#DDDDDD';
+            ctx.fillRect(400, 180, 25, 25); // Skylight
+
+            ctx.fillStyle = '#7BC043';
+            ctx.fillRect(200, 50, 50, 50);
+            ctx.fillRect(550, 300, 80, 60);
+
+            ctx.fillStyle = '#AAAAAA';
+            ctx.fillRect(250, 300, 100, 80); // Driveway
+
+            setupApplication();
+        }
+
+        // Roof area calculation functions
+        function handleImageClick(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) * (canvas.width / rect.width));
+            const y = Math.floor((e.clientY - rect.top) * (canvas.height / rect.height));
+            fillRoofArea(x, y);
+        }
+
+        function fillRoofArea(startX, startY) {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const startPos = (startY * canvas.width + startX) * 4;
+            const startR = data[startPos];
+            const startG = data[startPos + 1];
+            const startB = data[startPos + 2];
+            const tolerance = 50;
+            const visited = new Array(canvas.width * canvas.height).fill(false);
+            const stack = [{x: startX, y: startY}];
+            filledPixels = [];
+
+            const overlayCtx = roofOverlay.getContext('2d');
+            overlayCtx.clearRect(0, 0, roofOverlay.width, roofOverlay.height);
+            overlayCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+
+            while (stack.length > 0) {
+                const {x, y} = stack.pop();
+                if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height || visited[y * canvas.width + x]) continue;
+
+                const pos = (y * canvas.width + x) * 4;
+                const r = data[pos];
+                const g = data[pos + 1];
+                const b = data[pos + 2];
+
+                const colorDiff = Math.sqrt(
+                    Math.pow(r - startR, 2) +
+                    Math.pow(g - startG, 2) +
+                    Math.pow(b - startB, 2)
+                );
+                if (colorDiff > tolerance) continue;
+
+                visited[y * canvas.width + x] = true;
+                filledPixels.push({x, y});
+                overlayCtx.fillRect(x, y, 1, 1);
+
+                stack.push({x: x + 1, y});
+                stack.push({x: x - 1, y});
+                stack.push({x, y: y + 1});
+                stack.push({x, y: y - 1});
+            }
+
+            if (filledPixels.length > 0) {
+                calculateArea();
+            }
+        }
+
+        function calculateArea() {
+            const areaInPixels = filledPixels.length;
+            const conversionFactor = 0.5;
+            const squareFeet = Math.round(areaInPixels * conversionFactor);
+            areaResult.textContent = `Estimated Roof Area: ${squareFeet} square feet`;
+            resultArea.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
