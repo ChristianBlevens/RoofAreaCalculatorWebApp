@@ -64,6 +64,13 @@
         #imageContainer {
             position: relative;
         }
+        #resetButton {
+            margin-top: 10px;
+            background-color: #f44336;
+        }
+        #resetButton:hover {
+            background-color: #d32f2f;
+        }
     </style>
 </head>
 <body>
@@ -95,6 +102,7 @@
         <div id="resultArea">
             <h3>Results</h3>
             <p id="areaResult"></p>
+            <button id="resetButton">Calculate New Location</button>
         </div>
     </div>
 
@@ -110,6 +118,8 @@
         const resultArea = document.getElementById('resultArea');
         const areaResult = document.getElementById('areaResult');
         const loadingIndicator = document.getElementById('loadingIndicator');
+        const resetButton = document.getElementById('resetButton');
+        const locationControls = document.getElementById('locationControls');
 
         // Constants
         const CANVAS_WIDTH = 800;
@@ -117,7 +127,6 @@
         
         // Variables
         let filledPixels = [];
-        let isSetup = false;
 
         // Event Listeners
         useLocationBtn.addEventListener('click', () => {
@@ -128,12 +137,12 @@
                     position => loadImageFromCoordinates(position.coords.latitude, position.coords.longitude),
                     error => {
                         console.error("Geolocation error:", error.message);
-                        loadImageFromFile();
+                        generateTestImage();
                     }
                 );
             } else {
                 console.log("Geolocation not supported");
-                loadImageFromFile();
+                generateTestImage();
             }
         });
 
@@ -151,19 +160,36 @@
             
             startImageLoading();
             // Here we would normally geocode the address to get coordinates
-            // For demo purposes, we'll skip directly to loading the image
-            loadImageFromFile();
+            // For demo purposes, we'll skip directly to generating a test image
+            generateTestImage();
         });
 
-        // Setup functions - called once to initialize
+        resetButton.addEventListener('click', resetApplication);
+
+        // Setup and reset functions
         function setupApplication() {
-            if (isSetup) return;
-            
             setupRoofOverlay();
             canvas.addEventListener('click', handleImageClick);
             canvas.style.display = 'block';
             loadingIndicator.style.display = 'none';
-            isSetup = true;
+            locationControls.style.display = 'none';
+        }
+
+        function resetApplication() {
+            // Clear canvases
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            const overlayCtx = roofOverlay.getContext('2d');
+            overlayCtx.clearRect(0, 0, roofOverlay.width, roofOverlay.height);
+            
+            // Reset UI
+            canvas.style.display = 'none';
+            resultArea.style.display = 'none';
+            locationControls.style.display = 'block';
+            locationInput.style.display = 'none';
+            submitLocationBtn.style.display = 'none';
+            
+            // Clear data
+            filledPixels = [];
         }
 
         function setupRoofOverlay() {
@@ -180,59 +206,19 @@
             resultArea.style.display = 'none';
         }
 
-        // Core image loading functions - unified approach with fallbacks
+        // Core image loading functions
         function loadImageFromCoordinates(latitude, longitude) {
             try {
-                // First attempt: Try to get a map image from coordinates
-                const mapUrl = getMapImageUrl(latitude, longitude);
-                loadImageFromUrl(mapUrl);
+                // In a real app, this would fetch an image based on coordinates
+                // For demo, we'll go straight to the test image
+                generateTestImage();
             } catch (error) {
                 console.error("Error loading map:", error);
-                loadImageFromFile();
+                generateTestImage();
             }
         }
 
-        function getMapImageUrl(lat, lng) {
-            // In a real app, generate a URL from a maps API
-            return "https://via.placeholder.com/800x500?text=Map+Unavailable";
-        }
-
-        function loadImageFromFile() {
-            // Second attempt: Try to load a local test image
-            const testImage = new Image();
-            testImage.src = "testimage.webp";
-            
-            testImage.onload = () => {
-                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                ctx.drawImage(testImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                setupApplication();
-            };
-            
-            testImage.onerror = () => {
-                console.error("Failed to load test image, generating fallback image");
-                generateTestImage();
-            };
-        }
-
-        function loadImageFromUrl(url) {
-            const image = new Image();
-            image.crossOrigin = "anonymous";
-            
-            image.onload = () => {
-                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                ctx.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                setupApplication();
-            };
-            
-            image.onerror = () => {
-                console.error("Failed to load image from URL");
-                loadImageFromFile();
-            };
-            
-            image.src = url;
-        }
-
-        // Final fallback: Generate a test image programmatically
+        // Generate a test image programmatically - no cross-origin issues
         function generateTestImage() {
             ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
