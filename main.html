@@ -133,9 +133,12 @@
         // Constants
         const CANVAS_WIDTH = 800;
         const CANVAS_HEIGHT = 500;
+        const PROXY_URL = 'https://your-server.com/image-proxy'; // Replace with your actual proxy URL
+		const API_KEY = 0;
         
         // Variables
         let filledPixels = [];
+        let currentLocation = null;
 
         // Initial setup
         init();
@@ -148,26 +151,33 @@
             resetButton.addEventListener('click', resetApplication);
         }
         
+        // Unified location handling function
+        function handleLocationAcquired(location) {
+            currentLocation = location;
+            loadSatelliteImage(location);
+        }
+        
         // Event handler functions
         function handleUseLocationClick() {
-            startImageLoading();
-            
             if (navigator.geolocation) {
+                startImageLoading();
                 navigator.geolocation.getCurrentPosition(
                     position => {
-                        // In a real app, you would use these coordinates
-                        console.log(`Got coordinates: ${position.coords.latitude}, ${position.coords.longitude}`);
-                        // For testing, skip directly to creating a test image
-                        createTestImage();
+                        const location = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        console.log(`Got coordinates: ${location.lat}, ${location.lng}`);
+                        handleLocationAcquired(location);
                     },
                     error => {
                         console.error("Geolocation error:", error.message);
-                        createTestImage();
+                        loadingIndicator.style.display = 'none';
+                        alert("Error getting location. Please try entering your location manually.");
                     }
                 );
             } else {
-                console.log("Geolocation not supported");
-                createTestImage();
+                alert("Geolocation is not supported by your browser. Please enter location manually.");
             }
         }
 
@@ -184,10 +194,61 @@
             }
             
             startImageLoading();
-            // In a real app, you would use this location
-            console.log(`Location entered: ${location}`);
-            // For testing, skip directly to creating a test image
-            createTestImage();
+            
+            // Check if it's coordinates (simple check for comma)
+            if (location.includes(',')) {
+                const [lat, lng] = location.split(',').map(coord => parseFloat(coord.trim()));
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    handleLocationAcquired({ lat, lng });
+                    return;
+                }
+            }
+            
+            // Otherwise, geocode the address
+            geocodeAddress(location);
+        }
+        
+        function geocodeAddress(address) {
+            if (API_KEY !== 0) {
+                // Use Google's Geocoding API if API key is provided
+                fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'OK' && data.results.length > 0) {
+                            const location = data.results[0].geometry.location;
+                            handleLocationAcquired(location);
+                        } else {
+                            alert('Could not find location. Please try a different address.');
+                            loadingIndicator.style.display = 'none';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Geocoding error:', error);
+                        alert('Error finding location. Please try again.');
+                        loadingIndicator.style.display = 'none';
+                    });
+            } else {
+                // Fallback to OpenStreetMap Nominatim if no API key
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.length > 0) {
+                            const location = {
+                                lat: parseFloat(data[0].lat),
+                                lng: parseFloat(data[0].lon)
+                            };
+                            handleLocationAcquired(location);
+                        } else {
+                            alert('Could not find location. Please try a different address.');
+                            loadingIndicator.style.display = 'none';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Geocoding error:', error);
+                        alert('Error finding location. Please try again.');
+                        loadingIndicator.style.display = 'none';
+                    });
+            }
         }
         
         function handleImageClick(e) {
@@ -205,7 +266,79 @@
             actionButtons.style.display = 'none';
         }
 
-        // CORS-safe image creation function
+        // Load satellite image from location
+        function loadSatelliteImage(location) {
+            // Options for loading the image:
+            
+            // OPTION 1: Using server-side proxy (recommended)
+            // fetchImageFromProxy(location);
+            
+            // OPTION 2: Using Google Maps Static API (requires API key)
+            // fetchImageFromGoogleMaps(location);
+            
+            // For demo purposes, fall back to test image
+            createTestImage();
+        }
+        
+        // OPTION 1: Server-side proxy function
+        function fetchImageFromProxy(location) {
+            const params = new URLSearchParams({
+                lat: location.lat,
+                lng: location.lng,
+                zoom: 19,
+                width: CANVAS_WIDTH,
+                height: CANVAS_HEIGHT
+            });
+            
+            fetch(`${PROXY_URL}?${params}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    loadImageToCanvas(url);
+                })
+                .catch(error => {
+                    console.error('Error loading image:', error);
+                    createTestImage(); // Fallback to test image
+                });
+        }
+        
+        // OPTION 2: Google Maps Static API function
+        function fetchImageFromGoogleMaps(location) {
+            if (API_KEY === 0) {
+                alert('Google Maps API key is required. Please enter it and try again.');
+                loadingIndicator.style.display = 'none';
+                return;
+            }
+            
+            const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${location.lat},${location.lng}&zoom=19&size=${CANVAS_WIDTH}x${CANVAS_HEIGHT}&maptype=satellite&key=${apiKey}`;
+            
+            // Using a proxy to avoid CORS issues
+            const proxiedUrl = `${PROXY_URL}?url=${encodeURIComponent(mapUrl)}`;
+            
+            loadImageToCanvas(proxiedUrl);
+        }
+        
+        function loadImageToCanvas(imageUrl) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = function() {
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                ctx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                setupAfterImageLoad();
+            };
+            img.onerror = function() {
+                console.error('Error loading image');
+                createTestImage(); // Fallback to test image
+            };
+            img.src = imageUrl;
+        }
+
+        // Test image fallback
         function createTestImage() {
             ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             
@@ -288,6 +421,7 @@
             
             // Clear data
             filledPixels = [];
+            currentLocation = null;
         }
 
         // Roof area calculation functions
@@ -340,10 +474,21 @@
 
         function calculateArea() {
             const areaInPixels = filledPixels.length;
-            const conversionFactor = 0.5;
-            const squareFeet = Math.round(areaInPixels * conversionFactor);
+            
+            // In a real implementation, you would calculate the real-world area
+            // based on the image scale and geographic location
+            const pixelsPerSquareFoot = estimatePixelsPerSquareFoot();
+            const squareFeet = Math.round(areaInPixels / pixelsPerSquareFoot);
+            
             areaResult.textContent = `Estimated Roof Area: ${squareFeet} square feet`;
             resultArea.style.display = 'block';
+        }
+        
+        function estimatePixelsPerSquareFoot() {
+            // In a real implementation, this would use the location data and zoom level
+            // to calculate an accurate pixels-to-square-feet conversion
+            // For now, returning a placeholder value
+            return 2.0;
         }
     </script>
 </body>
