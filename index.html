@@ -325,13 +325,13 @@
                 currentMapType = 'satellite';
                 mapTypeToggle.textContent = 'Switch to Street Map';
                 
-                // Disable roof detection
+                // Disable roof detection but keep any existing overlay
                 roofDetectionEnabled = false;
                 roofDetectionStatus.textContent = 'Roof detection disabled in satellite view';
                 roofDetectionStatus.className = 'status-disabled';
                 
-                // Clear any existing selection when switching to satellite
-                clearRoofSelection();
+                // We no longer clear the selection when switching to satellite view
+                // This allows viewing the overlay against satellite imagery
             }
             
             roofDetectionStatus.style.display = 'block';
@@ -453,6 +453,12 @@
             actionButtons.style.display = 'block';
             mapTypeToggle.style.display = 'block';
             roofDetectionStatus.style.display = 'block';
+            
+            // If there was a previous roof selection and calculation, keep it displayed
+            if (resultArea.style.display === 'block') {
+                // The result area is already displayed, which means we had a calculation
+                // We don't need to do anything special here
+            }
         }
 
         function resetApplication() {
@@ -472,6 +478,18 @@
             // Clear data
             currentLocation = null;
             selectedRoofPolygon = null;
+            
+            // Reset to street map view by default for next time
+            if (map) {
+                if (currentMapType === 'satellite' && satelliteLayer) {
+                    map.removeLayer(satelliteLayer);
+                    if (streetLayer) streetLayer.addTo(map);
+                    currentMapType = 'street';
+                    roofDetectionEnabled = true;
+                    
+                    // No need to update UI elements as they're hidden now
+                }
+            }
         }
         
         function clearRoofSelection() {
@@ -548,7 +566,13 @@
             const startR = data[startPos];
             const startG = data[startPos + 1];
             const startB = data[startPos + 2];
-            const tolerance = 20;
+            
+            // Border color to avoid (c9bdb4 with some tolerance)
+            const borderR = 201; // c9 in hex
+            const borderG = 189; // bd in hex
+            const borderB = 180; // b4 in hex
+            const borderTolerance = 25; // Giving some wiggle room for the border color
+            
             const visited = new Array(canvas.width * canvas.height).fill(false);
             const stack = [{x: startX, y: startY}];
             filledPixels = [];
@@ -563,19 +587,28 @@
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
             
+            // First pass: Fill the interior of the roof
+            console.log("Starting first pass fill");
             while (stack.length > 0) {
                 const {x, y} = stack.pop();
                 if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height || visited[y * canvas.width + x]) continue;
+                
                 const pos = (y * canvas.width + x) * 4;
                 const r = data[pos];
                 const g = data[pos + 1];
                 const b = data[pos + 2];
-                const colorDiff = Math.sqrt(
-                    Math.pow(r - startR, 2) +
-                    Math.pow(g - startG, 2) +
-                    Math.pow(b - startB, 2)
+                
+                // Check if this is a border pixel - if it is, don't fill it
+                const borderColorDiff = Math.sqrt(
+                    Math.pow(r - borderR, 2) +
+                    Math.pow(g - borderG, 2) +
+                    Math.pow(b - borderB, 2)
                 );
-                if (colorDiff > tolerance) continue;
+                
+                // Skip if it's a border pixel
+                if (borderColorDiff <= borderTolerance) continue;
+                
+                // Otherwise, this is a pixel we want to fill
                 visited[y * canvas.width + x] = true;
                 filledPixels.push({x, y});
                 
@@ -593,6 +626,64 @@
                 stack.push({x, y: y + 1});
                 stack.push({x, y: y - 1});
             }
+            
+            // Second pass: Find and fill border pixels
+            console.log("Starting second pass to fill border");
+            
+            // Find the border pixels (they surround filled pixels)
+            const borderPixels = [];
+            
+            // We'll expand our search area slightly beyond the bounds of the filled area
+            const expandBy = 5; // pixels to expand search by
+            
+            for (let y = Math.max(0, minY - expandBy); y <= Math.min(canvas.height - 1, maxY + expandBy); y++) {
+                for (let x = Math.max(0, minX - expandBy); x <= Math.min(canvas.width - 1, maxX + expandBy); x++) {
+                    // Skip if this pixel is already filled
+                    if (visited[y * canvas.width + x]) continue;
+                    
+                    // Check if this is a border pixel - based on its color
+                    const pos = (y * canvas.width + x) * 4;
+                    const r = data[pos];
+                    const g = data[pos + 1];
+                    const b = data[pos + 2];
+                    
+                    const borderColorDiff = Math.sqrt(
+                        Math.pow(r - borderR, 2) +
+                        Math.pow(g - borderG, 2) +
+                        Math.pow(b - borderB, 2)
+                    );
+                    
+                    // If it's a border color AND adjacent to a filled pixel, add it
+                    if (borderColorDiff <= borderTolerance) {
+                        // Check if it's adjacent to a filled pixel
+                        const hasFilledNeighbor = 
+                            (x+1 < canvas.width && visited[y * canvas.width + (x+1)]) ||
+                            (x-1 >= 0 && visited[y * canvas.width + (x-1)]) ||
+                            (y+1 < canvas.height && visited[(y+1) * canvas.width + x]) ||
+                            (y-1 >= 0 && visited[(y-1) * canvas.width + x]);
+                        
+                        if (hasFilledNeighbor) {
+                            borderPixels.push({x, y});
+                            // Mark as visited and add to filled pixels
+                            visited[y * canvas.width + x] = true;
+                            filledPixels.push({x, y});
+                            
+                            // Update bounds
+                            minX = Math.min(minX, x);
+                            maxX = Math.max(maxX, x);
+                            minY = Math.min(minY, y);
+                            maxY = Math.max(maxY, y);
+                            
+                            // Draw on the temporary canvas (with a different color if you want to debug)
+                            tempCtx.fillStyle = 'rgba(255, 0, 0, 0.3)'; // Same as interior for production
+                            tempCtx.fillRect(x, y, 1, 1);
+                        }
+                    }
+                }
+            }
+            
+            console.log("Found", borderPixels.length, "border pixels");
+            console.log("Total filled pixels:", filledPixels.length);
             
             if (filledPixels.length > 0) {
                 // Calculate the bounds
@@ -635,22 +726,59 @@
             const zoom = map.getZoom();
             const center = map.getCenter();
             
-            // Calculate the pixel to square meter conversion
-            // At zoom level 19, one pixel is approximately 0.15m on a side at the equator
-            // This varies with latitude due to the Mercator projection
-            const metersPerPixel = 0.15 * Math.pow(2, (19 - zoom));
+            // Use the correct meters per pixel value based on the OSM table
+            // These values are at the equator and need latitude adjustment
+            const metersPerPixelTable = {
+                0: 156543.03,
+                1: 78271.52,
+                2: 39135.76,
+                3: 19567.88,
+                4: 9783.94,
+                5: 4891.97,
+                6: 2445.98,
+                7: 1222.99,
+                8: 611.50,
+                9: 305.75,
+                10: 152.87,
+                11: 76.44,
+                12: 38.22,
+                13: 19.11,
+                14: 9.55,
+                15: 4.78,
+                16: 2.39,
+                17: 1.19,
+                18: 0.60,
+                19: 0.299,  // From OSM table
+                20: 0.149
+            };
+            
+            // Get the base value for the current zoom level
+            let metersPerPixel = metersPerPixelTable[Math.round(zoom)] || 0.299; // Default to zoom 19 if not found
             
             // Apply latitude correction factor
             const latitudeCorrection = Math.cos(center.lat * Math.PI / 180);
+            metersPerPixel = metersPerPixel * latitudeCorrection;
+            
+            console.log("Zoom level:", zoom);
+            console.log("Latitude:", center.lat);
+            console.log("Meters per pixel (base):", metersPerPixelTable[Math.round(zoom)]);
+            console.log("Latitude correction:", latitudeCorrection);
+            console.log("Meters per pixel (corrected):", metersPerPixel);
+            console.log("Filled pixels:", filledPixels.length);
             
             // Calculate the total area in square meters
-            const squareMeters = filledPixels.length * Math.pow(metersPerPixel, 2) * latitudeCorrection;
+            const squareMeters = filledPixels.length * (metersPerPixel * metersPerPixel);
+            
+            console.log("Square meters (raw):", squareMeters);
             
             // Convert to square feet (1 m² = 10.7639 ft²)
             const squareFeet = Math.round(squareMeters * 10.7639);
             
             // Round to 2 decimal places
             const roundedSquareMeters = Math.round(squareMeters * 100) / 100;
+            
+            console.log("Final square meters:", roundedSquareMeters);
+            console.log("Square feet:", squareFeet);
             
             // Display the results
             areaResult.textContent = `Estimated Roof Area: ${squareFeet} square feet (${roundedSquareMeters} m²)`;
