@@ -110,7 +110,7 @@
         </div>
         
         <div id="loadingIndicator">
-            <p>Loading satellite imagery...</p>
+            <p>Loading map data...</p>
         </div>
         
         <div id="mapContainer">
@@ -285,9 +285,9 @@
                 // Position zoom control in the bottom right
                 map.zoomControl.setPosition('bottomright');
                 
-                // Add ESRI Satellite imagery layer with larger buffer (for more preloading)
-                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                // Add OpenStreetMap tiles instead of satellite imagery
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
                     maxZoom: MAX_AVAILABLE_ZOOM,
                     keepBuffer: 8, // Increase buffer size (default is 2)
                     updateWhenIdle: false, // Update tiles while panning
@@ -436,7 +436,7 @@
             const startR = data[startPos];
             const startG = data[startPos + 1];
             const startB = data[startPos + 2];
-            const tolerance = 20;
+            const tolerance = 10; // Lower tolerance for OpenStreetMap since buildings have more uniform colors
             const visited = new Array(canvas.width * canvas.height).fill(false);
             const stack = [{x: startX, y: startY}];
             filledPixels = [];
