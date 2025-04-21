@@ -92,6 +92,12 @@
             font-weight: bold;
             margin-bottom: 10px;
         }
+        /* Ensure map container properly positions the map */
+        #mapContainer {
+            position: relative;
+            width: 800px;
+            height: 500px;
+        }
     </style>
 </head>
 <body>
@@ -115,7 +121,7 @@
             <p>Loading satellite imagery...</p>
         </div>
         
-        <div id="mapContainer" style="position: relative;">
+        <div id="mapContainer">
             <div id="map"></div>
             <canvas id="mapOverlay"></canvas>
         </div>
@@ -148,6 +154,7 @@
         const actionButtons = document.getElementById('actionButtons');
         const mapElement = document.getElementById('map');
         const mapOverlay = document.getElementById('mapOverlay');
+        const mapContainer = document.getElementById('mapContainer');
 
         // Variables
         let map;
@@ -158,6 +165,7 @@
         let overlayCtx = null;
         const DEFAULT_ZOOM = 19;
         const MAX_ZOOM = 22;
+        let selectedRoofPolygon = null;
 
         // Initial setup
         init();
@@ -169,6 +177,16 @@
             submitLocationBtn.addEventListener('click', handleSubmitLocationClick);
             resetButton.addEventListener('click', resetApplication);
             clearSelectionBtn.addEventListener('click', clearRoofSelection);
+            
+            // Monitor window resize to adjust overlay
+            window.addEventListener('resize', function() {
+                if (map) {
+                    setupOverlayCanvas();
+                    if (selectedRoofPolygon) {
+                        redrawSelectedRoof();
+                    }
+                }
+            });
         }
         
         // Unified location handling function
@@ -263,6 +281,9 @@
         function initializeMap(location) {
             // Initialize the map if it doesn't exist
             if (!map) {
+                // Make sure the map element is visible first to ensure proper sizing
+                mapElement.style.display = 'block';
+                
                 map = L.map('map', {
                     center: [location.lat, location.lng],
                     zoom: DEFAULT_ZOOM,
@@ -280,7 +301,7 @@
                     maxZoom: MAX_ZOOM
                 });
 
-                // Position zoom control in the center-right
+                // Position zoom control in the bottom right
                 map.zoomControl.setPosition('bottomright');
                 
                 // Add ESRI Satellite imagery layer with larger buffer (for more preloading)
@@ -308,6 +329,9 @@
             map.whenReady(() => {
                 setupOverlayCanvas();
                 
+                // Set map to load from the true center of the canvas
+                centerMapView();
+                
                 // Add click handlers after a short delay to ensure map is fully loaded
                 setTimeout(() => {
                     map.on('click', handleMapClick);
@@ -320,8 +344,38 @@
                         }
                         isDragging = false;
                     });
+                    
+                    // Add handlers for map movement to update overlay position
+                    map.on('zoom', () => {
+                        if (selectedRoofPolygon) {
+                            redrawSelectedRoof();
+                        }
+                    });
+                    
+                    map.on('moveend', () => {
+                        if (selectedRoofPolygon) {
+                            redrawSelectedRoof();
+                        }
+                    });
+                    
                 }, 500);
             });
+        }
+        
+        // This function ensures the map is centered properly
+        function centerMapView() {
+            // Get the center point of our map container
+            const containerWidth = mapContainer.offsetWidth;
+            const containerHeight = mapContainer.offsetHeight;
+            
+            // Invalidate the map size to ensure it uses the full container
+            map.invalidateSize();
+            
+            // Recenter the map to ensure tiles load from the true center
+            const currentCenter = map.getCenter();
+            map.setView(currentCenter, map.getZoom());
+            
+            console.log("Map centered on container dimensions:", containerWidth, "x", containerHeight);
         }
         
         function setupOverlayCanvas() {
@@ -334,11 +388,13 @@
             // Get the context for drawing
             overlayCtx = mapOverlay.getContext('2d');
             
-            // Position the overlay
+            // Position the overlay correctly over the map
             mapOverlay.style.position = 'absolute';
-            mapOverlay.style.top = mapElement.offsetTop + 'px';
-            mapOverlay.style.left = mapElement.offsetLeft + 'px';
+            mapOverlay.style.top = '0';
+            mapOverlay.style.left = '0';
             mapOverlay.style.pointerEvents = 'none'; // Let events pass through to the map
+            
+            console.log("Overlay canvas set up with dimensions:", mapOverlay.width, "x", mapOverlay.height);
         }
 
         // Setup functions
@@ -379,6 +435,7 @@
             // Clear data
             filledPixels = [];
             currentLocation = null;
+            selectedRoofPolygon = null;
         }
         
         function clearRoofSelection() {
@@ -386,6 +443,7 @@
                 overlayCtx.clearRect(0, 0, mapOverlay.width, mapOverlay.height);
             }
             filledPixels = [];
+            selectedRoofPolygon = null;
             resultArea.style.display = 'none';
         }
 
@@ -403,29 +461,24 @@
         
         // Roof detection using flood fill algorithm
         function detectRoof(startX, startY) {
-            // In a real implementation, we'd need to get the actual pixel data from the map
-            // For this demo, we'll simulate the flood fill with canvas drawing
-            
             // Clear any previous selection
             overlayCtx.clearRect(0, 0, mapOverlay.width, mapOverlay.height);
             filledPixels = [];
             
             // For demonstration purposes, let's create a roof-like shape around the click point
-            // In a real implementation, this would be where you analyze the image pixel by pixel
             const ROOF_SIZE = 60 + Math.floor(Math.random() * 40); // Random roof size for demo
             
-            // Draw a semi-transparent red overlay to simulate the detected roof
-            overlayCtx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+            // Create a polygon points array for the "roof"
+            selectedRoofPolygon = [
+                {x: startX, y: startY},
+                {x: startX + ROOF_SIZE, y: startY + ROOF_SIZE/3},
+                {x: startX + ROOF_SIZE*1.2, y: startY + ROOF_SIZE},
+                {x: startX + ROOF_SIZE/2, y: startY + ROOF_SIZE*1.3},
+                {x: startX - ROOF_SIZE/3, y: startY + ROOF_SIZE}
+            ];
             
-            // Create an irregular polygon shape for the "roof"
-            overlayCtx.beginPath();
-            overlayCtx.moveTo(startX, startY);
-            overlayCtx.lineTo(startX + ROOF_SIZE, startY + ROOF_SIZE/3);
-            overlayCtx.lineTo(startX + ROOF_SIZE*1.2, startY + ROOF_SIZE);
-            overlayCtx.lineTo(startX + ROOF_SIZE/2, startY + ROOF_SIZE*1.3);
-            overlayCtx.lineTo(startX - ROOF_SIZE/3, startY + ROOF_SIZE);
-            overlayCtx.closePath();
-            overlayCtx.fill();
+            // Draw the roof selection
+            drawRoofSelection();
             
             // In a real implementation, we would count the filled pixels
             // For now, just estimate a random but realistic roof area
@@ -433,6 +486,39 @@
             
             // Calculate the area based on the current zoom level and location
             calculateArea(pixelCount);
+        }
+        
+        function drawRoofSelection() {
+            if (!selectedRoofPolygon || !overlayCtx) return;
+            
+            // Draw a semi-transparent red overlay to simulate the detected roof
+            overlayCtx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+            
+            // Draw the polygon
+            overlayCtx.beginPath();
+            overlayCtx.moveTo(selectedRoofPolygon[0].x, selectedRoofPolygon[0].y);
+            
+            for (let i = 1; i < selectedRoofPolygon.length; i++) {
+                overlayCtx.lineTo(selectedRoofPolygon[i].x, selectedRoofPolygon[i].y);
+            }
+            
+            overlayCtx.closePath();
+            overlayCtx.fill();
+            
+            // Add a border for better visibility
+            overlayCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            overlayCtx.lineWidth = 2;
+            overlayCtx.stroke();
+        }
+        
+        function redrawSelectedRoof() {
+            if (!selectedRoofPolygon) return;
+            
+            // Clear the canvas
+            overlayCtx.clearRect(0, 0, mapOverlay.width, mapOverlay.height);
+            
+            // Redraw the roof
+            drawRoofSelection();
         }
 
         // Area calculation functions
