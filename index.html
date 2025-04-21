@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roof Area Calculator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -31,15 +32,11 @@
         button:hover {
             background-color: #3367d6;
         }
-        #mainCanvas {
+        #map {
+            height: 500px;
+            width: 800px;
             border: 1px solid #ccc;
             display: none;
-        }
-        #roofOverlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            pointer-events: none;
         }
         #resultArea {
             margin-top: 20px;
@@ -61,9 +58,6 @@
             text-align: center;
             padding: 20px;
         }
-        #imageContainer {
-            position: relative;
-        }
         #resetButton {
             margin-top: 10px;
             background-color: #f44336;
@@ -74,6 +68,18 @@
         #actionButtons {
             display: none;
             margin-top: 10px;
+        }
+        #measureTools {
+            display: none;
+            margin-top: 10px;
+        }
+        .leaflet-pm-toolbar {
+            display: none;
+        }
+        .area-tooltip {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid #666;
+            padding: 5px;
         }
     </style>
 </head>
@@ -98,14 +104,16 @@
             <p>Loading satellite imagery...</p>
         </div>
         
-        <div id="imageContainer">
-            <canvas id="mainCanvas" width="800" height="500"></canvas>
-            <canvas id="roofOverlay"></canvas>
-            
-            <div id="actionButtons">
-                <p>Click on the roof in the image to calculate its area</p>
-                <button id="resetButton">Calculate New Location</button>
-            </div>
+        <div id="map"></div>
+        
+        <div id="actionButtons">
+            <p>Use the drawing tools to outline the roof area</p>
+            <button id="resetButton">Calculate New Location</button>
+        </div>
+        
+        <div id="measureTools">
+            <button id="startMeasure">Start Drawing Roof Outline</button>
+            <button id="clearMeasure" style="display:none">Clear & Start Over</button>
         </div>
         
         <div id="resultArea">
@@ -114,31 +122,31 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.pm/2.2.0/leaflet.pm.min.js"></script>
     <script>
         // DOM Elements
         const useLocationBtn = document.getElementById('useLocation');
         const enterLocationBtn = document.getElementById('enterLocation');
         const locationInput = document.getElementById('locationInput');
         const submitLocationBtn = document.getElementById('submitLocation');
-        const canvas = document.getElementById('mainCanvas');
-        const ctx = canvas.getContext('2d');
-        const roofOverlay = document.getElementById('roofOverlay');
         const resultArea = document.getElementById('resultArea');
         const areaResult = document.getElementById('areaResult');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const resetButton = document.getElementById('resetButton');
         const locationControls = document.getElementById('locationControls');
         const actionButtons = document.getElementById('actionButtons');
+        const measureTools = document.getElementById('measureTools');
+        const startMeasureBtn = document.getElementById('startMeasure');
+        const clearMeasureBtn = document.getElementById('clearMeasure');
+        const mapElement = document.getElementById('map');
 
-        // Constants
-        const CANVAS_WIDTH = 800;
-        const CANVAS_HEIGHT = 500;
-        const PROXY_URL = 'https://your-server.com/image-proxy'; // Replace with your actual proxy URL
-		const API_KEY = 0;
-        
         // Variables
-        let filledPixels = [];
+        let map;
         let currentLocation = null;
+        let drawnItems = null;
+        let currentPolygon = null;
+        const DEFAULT_ZOOM = 19;
 
         // Initial setup
         init();
@@ -149,12 +157,14 @@
             enterLocationBtn.addEventListener('click', handleEnterLocationClick);
             submitLocationBtn.addEventListener('click', handleSubmitLocationClick);
             resetButton.addEventListener('click', resetApplication);
+            startMeasureBtn.addEventListener('click', startMeasuring);
+            clearMeasureBtn.addEventListener('click', clearMeasurement);
         }
         
         // Unified location handling function
         function handleLocationAcquired(location) {
             currentLocation = location;
-            loadSatelliteImage(location);
+            initializeMap(location);
         }
         
         // Event handler functions
@@ -209,287 +219,198 @@
         }
         
         function geocodeAddress(address) {
-            if (API_KEY !== 0) {
-                // Use Google's Geocoding API if API key is provided
-                fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'OK' && data.results.length > 0) {
-                            const location = data.results[0].geometry.location;
-                            handleLocationAcquired(location);
-                        } else {
-                            alert('Could not find location. Please try a different address.');
-                            loadingIndicator.style.display = 'none';
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Geocoding error:', error);
-                        alert('Error finding location. Please try again.');
+            // Using OpenStreetMap Nominatim for geocoding
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        const location = {
+                            lat: parseFloat(data[0].lat),
+                            lng: parseFloat(data[0].lon)
+                        };
+                        handleLocationAcquired(location);
+                    } else {
+                        alert('Could not find location. Please try a different address.');
                         loadingIndicator.style.display = 'none';
-                    });
-            } else {
-                // Fallback to OpenStreetMap Nominatim if no API key
-                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.length > 0) {
-                            const location = {
-                                lat: parseFloat(data[0].lat),
-                                lng: parseFloat(data[0].lon)
-                            };
-                            handleLocationAcquired(location);
-                        } else {
-                            alert('Could not find location. Please try a different address.');
-                            loadingIndicator.style.display = 'none';
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Geocoding error:', error);
-                        alert('Error finding location. Please try again.');
-                        loadingIndicator.style.display = 'none';
-                    });
-            }
-        }
-        
-        function handleImageClick(e) {
-            const rect = canvas.getBoundingClientRect();
-            const x = Math.floor((e.clientX - rect.left) * (canvas.width / rect.width));
-            const y = Math.floor((e.clientY - rect.top) * (canvas.height / rect.height));
-            fillRoofArea(x, y);
+                    }
+                })
+                .catch(error => {
+                    console.error('Geocoding error:', error);
+                    alert('Error finding location. Please try again.');
+                    loadingIndicator.style.display = 'none';
+                });
         }
 
         // Loading indicator function
         function startImageLoading() {
             loadingIndicator.style.display = 'block';
-            canvas.style.display = 'none';
+            mapElement.style.display = 'none';
             resultArea.style.display = 'none';
             actionButtons.style.display = 'none';
+            measureTools.style.display = 'none';
         }
 
-        // Load satellite image from location
-        function loadSatelliteImage(location) {
-            // Options for loading the image:
+        // Initialize Leaflet map
+        function initializeMap(location) {
+            // Initialize the map if it doesn't exist
+            if (!map) {
+                map = L.map('map').setView([location.lat, location.lng], DEFAULT_ZOOM);
+                
+                // Add ESRI Satellite imagery layer
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                    maxZoom: 22
+                }).addTo(map);
+                
+                // Initialize drawing controls
+                initializeDrawingControls();
+            } else {
+                map.setView([location.lat, location.lng], DEFAULT_ZOOM);
+            }
             
-            // OPTION 1: Using server-side proxy (recommended)
-            // fetchImageFromProxy(location);
-            
-            // OPTION 2: Using Google Maps Static API (requires API key)
-            // fetchImageFromGoogleMaps(location);
-            
-            // For demo purposes, fall back to test image
-            createTestImage();
+            setupAfterMapLoad();
         }
         
-        // OPTION 1: Server-side proxy function
-        function fetchImageFromProxy(location) {
-            const params = new URLSearchParams({
-                lat: location.lat,
-                lng: location.lng,
-                zoom: 19,
-                width: CANVAS_WIDTH,
-                height: CANVAS_HEIGHT
+        function initializeDrawingControls() {
+            // Initialize FeatureGroup for the drawn items
+            drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+            
+            // Initialize Leaflet.PM drawing controls
+            map.pm.addControls({
+                position: 'topleft',
+                drawCircle: false,
+                drawMarker: false,
+                drawCircleMarker: false,
+                drawRectangle: false,
+                drawPolyline: false,
+                drawPolygon: true,
+                editMode: true,
+                dragMode: false,
+                cutPolygon: false,
+                removalMode: true
             });
             
-            fetch(`${PROXY_URL}?${params}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.blob();
-                })
-                .then(blob => {
-                    const url = URL.createObjectURL(blob);
-                    loadImageToCanvas(url);
-                })
-                .catch(error => {
-                    console.error('Error loading image:', error);
-                    createTestImage(); // Fallback to test image
-                });
-        }
-        
-        // OPTION 2: Google Maps Static API function
-        function fetchImageFromGoogleMaps(location) {
-            if (API_KEY === 0) {
-                alert('Google Maps API key is required. Please enter it and try again.');
-                loadingIndicator.style.display = 'none';
-                return;
-            }
+            // Event listeners for drawing
+            map.on('pm:create', function(e) {
+                currentPolygon = e.layer;
+                drawnItems.addLayer(currentPolygon);
+                calculateArea(currentPolygon);
+                clearMeasureBtn.style.display = 'inline-block';
+                startMeasureBtn.style.display = 'none';
+            });
             
-            const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${location.lat},${location.lng}&zoom=19&size=${CANVAS_WIDTH}x${CANVAS_HEIGHT}&maptype=satellite&key=${apiKey}`;
-            
-            // Using a proxy to avoid CORS issues
-            const proxiedUrl = `${PROXY_URL}?url=${encodeURIComponent(mapUrl)}`;
-            
-            loadImageToCanvas(proxiedUrl);
-        }
-        
-        function loadImageToCanvas(imageUrl) {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = function() {
-                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                ctx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                setupAfterImageLoad();
-            };
-            img.onerror = function() {
-                console.error('Error loading image');
-                createTestImage(); // Fallback to test image
-            };
-            img.src = imageUrl;
-        }
-
-        // Test image fallback
-        function createTestImage() {
-            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            
-            // Background
-            ctx.fillStyle = '#a8e6a8';
-            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            
-            // Roof shape
-            ctx.fillStyle = '#8B4513';
-            ctx.beginPath();
-            ctx.moveTo(300, 150);
-            ctx.lineTo(500, 150);
-            ctx.lineTo(530, 200);
-            ctx.lineTo(480, 250);
-            ctx.lineTo(320, 250);
-            ctx.lineTo(270, 200);
-            ctx.closePath();
-            ctx.fill();
-            
-            // Roof texture
-            ctx.fillStyle = '#7D3C12';
-            ctx.fillRect(350, 180, 100, 30);
-            
-            // Random texture variations
-            for (let i = 0; i < 20; i++) {
-                const x = 300 + Math.random() * 200;
-                const y = 150 + Math.random() * 100;
-                const size = 5 + Math.random() * 10;
-                ctx.fillStyle = `rgba(${100 + Math.random() * 50}, ${30 + Math.random() * 20}, ${10 + Math.random() * 15}, 0.5)`;
-                ctx.fillRect(x, y, size, size);
-            }
-            
-            // Additional elements
-            ctx.fillStyle = '#DDDDDD';
-            ctx.fillRect(400, 180, 25, 25); // Skylight
-            
-            ctx.fillStyle = '#7BC043';
-            ctx.fillRect(200, 50, 50, 50);
-            ctx.fillRect(550, 300, 80, 60);
-            
-            ctx.fillStyle = '#AAAAAA';
-            ctx.fillRect(250, 300, 100, 80); // Driveway
-            
-            setupAfterImageLoad();
+            map.on('pm:edit', function(e) {
+                calculateArea(e.layer);
+            });
         }
 
         // Setup functions
-        function setupAfterImageLoad() {
-            setupRoofOverlay();
-            canvas.addEventListener('click', handleImageClick);
-            canvas.style.display = 'block';
+        function setupAfterMapLoad() {
+            mapElement.style.display = 'block';
             loadingIndicator.style.display = 'none';
             locationControls.style.display = 'none';
             actionButtons.style.display = 'block';
-        }
-
-        function setupRoofOverlay() {
-            roofOverlay.width = CANVAS_WIDTH;
-            roofOverlay.height = CANVAS_HEIGHT;
-            roofOverlay.style.top = canvas.offsetTop + 'px';
-            roofOverlay.style.left = canvas.offsetLeft + 'px';
+            measureTools.style.display = 'block';
+            
+            // Make sure controls are reset
+            clearMeasureBtn.style.display = 'none';
+            startMeasureBtn.style.display = 'inline-block';
         }
 
         function resetApplication() {
-            // Clear canvases
-            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            const overlayCtx = roofOverlay.getContext('2d');
-            overlayCtx.clearRect(0, 0, roofOverlay.width, roofOverlay.height);
-            
             // Reset UI
-            canvas.style.display = 'none';
+            mapElement.style.display = 'none';
             resultArea.style.display = 'none';
             actionButtons.style.display = 'none';
+            measureTools.style.display = 'none';
             locationControls.style.display = 'block';
             locationInput.style.display = 'none';
             submitLocationBtn.style.display = 'none';
             
-            // Remove event listeners
-            canvas.removeEventListener('click', handleImageClick);
+            // Clear drawn items
+            if (drawnItems) {
+                drawnItems.clearLayers();
+            }
             
             // Clear data
-            filledPixels = [];
+            currentPolygon = null;
             currentLocation = null;
         }
-
-        // Roof area calculation functions
-        function fillRoofArea(startX, startY) {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            const startPos = (startY * canvas.width + startX) * 4;
-            const startR = data[startPos];
-            const startG = data[startPos + 1];
-            const startB = data[startPos + 2];
-            const tolerance = 50;
-            const visited = new Array(canvas.width * canvas.height).fill(false);
-            const stack = [{x: startX, y: startY}];
-            filledPixels = [];
-
-            const overlayCtx = roofOverlay.getContext('2d');
-            overlayCtx.clearRect(0, 0, roofOverlay.width, roofOverlay.height);
-            overlayCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-
-            while (stack.length > 0) {
-                const {x, y} = stack.pop();
-                if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height || visited[y * canvas.width + x]) continue;
-
-                const pos = (y * canvas.width + x) * 4;
-                const r = data[pos];
-                const g = data[pos + 1];
-                const b = data[pos + 2];
-
-                const colorDiff = Math.sqrt(
-                    Math.pow(r - startR, 2) +
-                    Math.pow(g - startG, 2) +
-                    Math.pow(b - startB, 2)
-                );
-                if (colorDiff > tolerance) continue;
-
-                visited[y * canvas.width + x] = true;
-                filledPixels.push({x, y});
-                overlayCtx.fillRect(x, y, 1, 1);
-
-                stack.push({x: x + 1, y});
-                stack.push({x: x - 1, y});
-                stack.push({x, y: y + 1});
-                stack.push({x, y: y - 1});
+        
+        function startMeasuring() {
+            // Activate polygon drawing tool
+            map.pm.enableDraw('Polygon', {
+                snappable: true,
+                templineStyle: {
+                    color: 'red'
+                },
+                hintlineStyle: {
+                    color: 'red',
+                    dashArray: [5, 5]
+                },
+                pathOptions: {
+                    color: 'red',
+                    fillColor: 'rgba(255, 0, 0, 0.3)',
+                    fillOpacity: 0.3
+                }
+            });
+            
+            // Show a hint to the user
+            alert('Click on the map to start drawing the roof outline. Click on the starting point to complete the polygon.');
+        }
+        
+        function clearMeasurement() {
+            if (drawnItems) {
+                drawnItems.clearLayers();
             }
-
-            if (filledPixels.length > 0) {
-                calculateArea();
-            }
+            resultArea.style.display = 'none';
+            clearMeasureBtn.style.display = 'none';
+            startMeasureBtn.style.display = 'inline-block';
         }
 
-        function calculateArea() {
-            const areaInPixels = filledPixels.length;
+        // Area calculation functions
+        function calculateArea(polygon) {
+            // Get the area in square meters
+            const areaInSquareMeters = L.GeometryUtil.geodesicArea(polygon.getLatLngs()[0]);
             
-            // In a real implementation, you would calculate the real-world area
-            // based on the image scale and geographic location
-            const pixelsPerSquareFoot = estimatePixelsPerSquareFoot();
-            const squareFeet = Math.round(areaInPixels / pixelsPerSquareFoot);
+            // Convert to square feet (1 m² = 10.7639 ft²)
+            const squareFeet = Math.round(areaInSquareMeters * 10.7639);
             
-            areaResult.textContent = `Estimated Roof Area: ${squareFeet} square feet`;
+            // Also calculate square meters with 2 decimal places
+            const squareMeters = Math.round(areaInSquareMeters * 100) / 100;
+            
+            areaResult.textContent = `Estimated Roof Area: ${squareFeet} square feet (${squareMeters} m²)`;
             resultArea.style.display = 'block';
         }
         
-        function estimatePixelsPerSquareFoot() {
-            // In a real implementation, this would use the location data and zoom level
-            // to calculate an accurate pixels-to-square-feet conversion
-            // For now, returning a placeholder value
-            return 2.0;
-        }
+        // Add Leaflet.GeometryUtil for area calculations
+        L.GeometryUtil = {
+            // Returns the area of a polygon in square meters
+            geodesicArea: function(latLngs) {
+                const pointsCount = latLngs.length;
+                let area = 0.0;
+                
+                if (pointsCount > 2) {
+                    for (let i = 0; i < pointsCount; i++) {
+                        const p1 = latLngs[i];
+                        const p2 = latLngs[(i + 1) % pointsCount];
+                        
+                        area += this.rad(p2.lng - p1.lng) * 
+                                (2 + Math.sin(this.rad(p1.lat)) + 
+                                 Math.sin(this.rad(p2.lat)));
+                    }
+                    
+                    area = area * 6378137.0 * 6378137.0 / 2.0;
+                }
+                
+                return Math.abs(area);
+            },
+            
+            rad: function(x) {
+                return x * Math.PI / 180;
+            }
+        };
     </script>
 </body>
 </html>
