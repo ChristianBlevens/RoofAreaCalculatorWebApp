@@ -89,7 +89,43 @@
             width: 800px;
             height: 500px;
         }
-        /* We don't need the roofOverlay style since we're now using Leaflet layers */
+        /* Map toggle button */
+        #mapTypeToggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background-color: white;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-weight: bold;
+            color: #333;
+        }
+        #mapTypeToggle:hover {
+            background-color: #f4f4f4;
+        }
+        /* Status indicator for roof detection */
+        #roofDetectionStatus {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            z-index: 1000;
+            background-color: white;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 12px;
+            display: none;
+        }
+        .status-enabled {
+            background-color: #dff0d8 !important;
+            color: #3c763d;
+        }
+        .status-disabled {
+            background-color: #f2dede !important;
+            color: #a94442;
+        }
     </style>
 </head>
 <body>
@@ -110,11 +146,13 @@
         </div>
         
         <div id="loadingIndicator">
-            <p>Loading satellite imagery...</p>
+            <p>Loading map...</p>
         </div>
         
         <div id="mapContainer">
             <div id="map"></div>
+            <button id="mapTypeToggle">Switch to Street Map</button>
+            <div id="roofDetectionStatus">Roof detection enabled</div>
         </div>
         
         <div id="actionButtons">
@@ -146,6 +184,11 @@
         const actionButtons = document.getElementById('actionButtons');
         const mapElement = document.getElementById('map');
         const mapContainer = document.getElementById('mapContainer');
+        const mapTypeToggle = document.getElementById('mapTypeToggle');
+        const roofDetectionStatus = document.getElementById('roofDetectionStatus');
+        
+        // Initially hide the map toggle button until map is loaded
+        mapTypeToggle.style.display = 'none';
 
         // Variables
         let map;
@@ -157,6 +200,9 @@
         let roofOverlay = null;
         let filledPixels = [];
         let canvas, ctx;
+        let satelliteLayer, streetLayer;
+        let currentMapType = 'satellite'; // Initially set to satellite
+        let roofDetectionEnabled = false; // Initially disabled since we start with satellite view
 
         // Initial setup
         init();
@@ -168,6 +214,7 @@
             submitLocationBtn.addEventListener('click', handleSubmitLocationClick);
             resetButton.addEventListener('click', resetApplication);
             clearSelectionBtn.addEventListener('click', clearRoofSelection);
+            mapTypeToggle.addEventListener('click', toggleMapType);
         }
         
         // Unified location handling function
@@ -258,6 +305,38 @@
             actionButtons.style.display = 'none';
         }
 
+        // Map type toggle handler
+        function toggleMapType() {
+            if (currentMapType === 'satellite') {
+                // Switch to street map
+                map.removeLayer(satelliteLayer);
+                streetLayer.addTo(map);
+                currentMapType = 'street';
+                mapTypeToggle.textContent = 'Switch to Satellite';
+                
+                // Enable roof detection
+                roofDetectionEnabled = true;
+                roofDetectionStatus.textContent = 'Roof detection enabled';
+                roofDetectionStatus.className = 'status-enabled';
+            } else {
+                // Switch to satellite
+                map.removeLayer(streetLayer);
+                satelliteLayer.addTo(map);
+                currentMapType = 'satellite';
+                mapTypeToggle.textContent = 'Switch to Street Map';
+                
+                // Disable roof detection
+                roofDetectionEnabled = false;
+                roofDetectionStatus.textContent = 'Roof detection disabled in satellite view';
+                roofDetectionStatus.className = 'status-disabled';
+                
+                // Clear any existing selection when switching to satellite
+                clearRoofSelection();
+            }
+            
+            roofDetectionStatus.style.display = 'block';
+        }
+
         // Initialize Leaflet map
         function initializeMap(location) {
             // Initialize the map if it doesn't exist
@@ -285,17 +364,40 @@
                 // Position zoom control in the bottom right
                 map.zoomControl.setPosition('bottomright');
                 
-                // Add ESRI Satellite imagery layer with larger buffer (for more preloading)
-                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                // Create both map layers
+                
+                // Satellite layer (ESRI)
+                satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
                     maxZoom: MAX_AVAILABLE_ZOOM,
                     keepBuffer: 8, // Increase buffer size (default is 2)
                     updateWhenIdle: false, // Update tiles while panning
                     updateWhenZooming: false // Update tiles while zooming
-                }).addTo(map);
+                });
+                
+                // OpenStreetMap layer
+                streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom: MAX_AVAILABLE_ZOOM,
+                    keepBuffer: 8,
+                    updateWhenIdle: false,
+                    updateWhenZooming: false
+                });
+                
+                // Start with street map layer by default
+                streetLayer.addTo(map);
+                currentMapType = 'street';
                 
                 // Setup the interaction handlers
                 setupMapInteractions();
+                
+                // Update the toggle button and roof detection status
+                mapTypeToggle.textContent = 'Switch to Satellite';
+                roofDetectionStatus.textContent = 'Roof detection enabled';
+                roofDetectionStatus.className = 'status-enabled';
+                
+                // Enable roof detection since we're starting with street map
+                roofDetectionEnabled = true;
                 
             } else {
                 // Just update the view if map already exists
@@ -349,6 +451,8 @@
             loadingIndicator.style.display = 'none';
             locationControls.style.display = 'none';
             actionButtons.style.display = 'block';
+            mapTypeToggle.style.display = 'block';
+            roofDetectionStatus.style.display = 'block';
         }
 
         function resetApplication() {
@@ -359,6 +463,8 @@
             locationControls.style.display = 'block';
             locationInput.style.display = 'none';
             submitLocationBtn.style.display = 'none';
+            mapTypeToggle.style.display = 'none';
+            roofDetectionStatus.style.display = 'none';
             
             // Remove any existing overlay
             clearRoofSelection();
@@ -382,6 +488,12 @@
 
         function handleMapClick(e) {
             if (isDragging) return; // Don't process if this was a drag
+            
+            // Check if roof detection is enabled (only in street map view)
+            if (!roofDetectionEnabled) {
+                alert("Roof detection is only available in street map view. Please switch to street map to detect roofs.");
+                return;
+            }
             
             // Get the lat/lng of the click
             const clickLatLng = e.latlng;
