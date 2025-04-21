@@ -6,21 +6,27 @@
     <title>Roof Area Calculator</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <style>
+        /* Base styles */
         body {
             font-family: Arial, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
         }
+        
+        /* Layout components */
         .container {
             display: flex;
             flex-direction: column;
             gap: 20px;
         }
+        
         .options {
             display: flex;
             gap: 10px;
         }
+        
+        /* Button styles */
         button {
             padding: 10px 15px;
             background-color: #4285f4;
@@ -29,67 +35,39 @@
             border-radius: 4px;
             cursor: pointer;
         }
+        
         button:hover {
             background-color: #3367d6;
         }
+        
+        #resetButton {
+            margin-top: 10px;
+            background-color: #f44336;
+        }
+        
+        #resetButton:hover {
+            background-color: #d32f2f;
+        }
+        
+        #clearSelection {
+            background-color: #FFA500;
+        }
+        
+        /* Map container styles */
         #map {
             height: 500px;
             width: 800px;
             border: 1px solid #ccc;
             display: none;
-            position: relative;
         }
-        #resultArea {
-            margin-top: 20px;
-            display: none;
-            padding: 15px;
-            background-color: #f1f8e9;
-            border-radius: 4px;
-        }
-        #locationInput {
-            padding: 10px;
-            width: 300px;
-            display: none;
-        }
-        #submitLocation {
-            display: none;
-        }
-        #loadingIndicator {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        #resetButton {
-            margin-top: 10px;
-            background-color: #f44336;
-        }
-        #resetButton:hover {
-            background-color: #d32f2f;
-        }
-        #actionButtons {
-            display: none;
-            margin-top: 10px;
-        }
-        .leaflet-control-container .leaflet-top {
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        .leaflet-control-container .leaflet-left {
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        .instruction-text {
-            text-align: center;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        /* Ensure map container properly positions the map */
+        
         #mapContainer {
             position: relative;
             width: 800px;
             height: 500px;
         }
-        /* Map toggle button */
+        
+        /* Map UI elements */
         #mapTypeToggle {
             position: absolute;
             top: 10px;
@@ -101,11 +79,13 @@
             padding: 6px 10px;
             font-weight: bold;
             color: #333;
+            display: none;
         }
+        
         #mapTypeToggle:hover {
             background-color: #f4f4f4;
         }
-        /* Status indicator for roof detection */
+        
         #roofDetectionStatus {
             position: absolute;
             top: 50px;
@@ -118,13 +98,67 @@
             font-size: 12px;
             display: none;
         }
+        
+        /* Status indicators */
         .status-enabled {
             background-color: #dff0d8 !important;
             color: #3c763d;
         }
+        
         .status-disabled {
             background-color: #f2dede !important;
             color: #a94442;
+        }
+        
+        /* Form elements */
+        #locationInput {
+            padding: 10px;
+            width: 300px;
+            display: none;
+        }
+        
+        #submitLocation {
+            display: none;
+        }
+        
+        /* Results display */
+        #resultArea {
+            margin-top: 20px;
+            display: none;
+            padding: 15px;
+            background-color: #f1f8e9;
+            border-radius: 4px;
+        }
+        
+        /* Loading indicator */
+        #loadingIndicator {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        /* Action buttons container */
+        #actionButtons {
+            display: none;
+            margin-top: 10px;
+        }
+        
+        /* Instruction text */
+        .instruction-text {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        /* Leaflet control positioning */
+        .leaflet-control-container .leaflet-top {
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .leaflet-control-container .leaflet-left {
+            left: 50%;
+            transform: translateX(-50%);
         }
     </style>
 </head>
@@ -132,6 +166,7 @@
     <div class="container">
         <h1>Roof Area Calculator</h1>
         
+        <!-- Location selection controls -->
         <div id="locationControls">
             <h2>Select a location method</h2>
             <div class="options">
@@ -145,32 +180,48 @@
             </div>
         </div>
         
+        <!-- Loading indicator -->
         <div id="loadingIndicator">
             <p>Loading map...</p>
         </div>
         
+        <!-- Map container -->
         <div id="mapContainer">
             <div id="map"></div>
             <button id="mapTypeToggle">Switch to Street Map</button>
             <div id="roofDetectionStatus">Roof detection enabled</div>
         </div>
         
+        <!-- Action buttons -->
         <div id="actionButtons">
             <p class="instruction-text">Click on the roof to detect its area. Drag to pan the view.</p>
             <button id="resetButton">Calculate New Location</button>
-            <button id="clearSelection" style="background-color: #FFA500;">Clear Selection</button>
+            <button id="clearSelection">Clear Selection</button>
         </div>
         
+        <!-- Results display -->
         <div id="resultArea">
             <h3>Results</h3>
             <p id="areaResult"></p>
         </div>
     </div>
 
+    <!-- External libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
     <script>
-        // DOM Elements
+        /**
+         * Roof Area Calculator
+         * 
+         * This application allows users to calculate roof areas using interactive maps.
+         * It works by capturing map imagery, performing a flood fill algorithm to detect
+         * roof boundaries, and then calculating the area based on geographic coordinates.
+         */
+        
+        // ============================================================
+        // DOM Element References
+        // ============================================================
         const useLocationBtn = document.getElementById('useLocation');
         const enterLocationBtn = document.getElementById('enterLocation');
         const locationInput = document.getElementById('locationInput');
@@ -187,26 +238,32 @@
         const mapTypeToggle = document.getElementById('mapTypeToggle');
         const roofDetectionStatus = document.getElementById('roofDetectionStatus');
         
-        // Initially hide the map toggle button until map is loaded
-        mapTypeToggle.style.display = 'none';
-
-        // Variables
-        let map;
-        let currentLocation = null;
-        let isDragging = false;
-        const DEFAULT_ZOOM = 19;
-        const MAX_AVAILABLE_ZOOM = 19; // Limit max zoom to available data
-        let selectedRoofPolygon = null;
-        let roofOverlay = null;
-        let filledPixels = [];
-        let canvas, ctx;
-        let satelliteLayer, streetLayer;
-        let currentMapType = 'satellite'; // Initially set to satellite
-        let roofDetectionEnabled = false; // Initially disabled since we start with satellite view
-
-        // Initial setup
-        init();
+        // ============================================================
+        // Global Variables
+        // ============================================================
+        let map;                           // Leaflet map object
+        let currentLocation = null;        // Current geographic coordinates
+        let isDragging = false;            // Flag for dragging vs. clicking
+        let selectedRoofPolygon = null;    // Currently selected roof polygon
+        let roofOverlay = null;            // Image overlay for the roof
+        let filledPixels = [];             // Pixels filled during roof detection
+        let canvas, ctx;                   // Canvas and context for image processing
+        let satelliteLayer, streetLayer;   // Map layer references
+        let currentMapType = 'satellite';  // Current map type ('satellite' or 'street')
+        let roofDetectionEnabled = false;  // Whether roof detection is enabled
         
+        // Constants
+        const DEFAULT_ZOOM = 19;           // Default zoom level
+        const MAX_AVAILABLE_ZOOM = 19;     // Maximum zoom level for available data
+        
+        // ============================================================
+        // Initialization
+        // ============================================================
+        
+        /**
+         * Initialize the application
+         * Sets up event handlers and prepares the UI
+         */
         function init() {
             // Set up event listeners
             useLocationBtn.addEventListener('click', handleUseLocationClick);
@@ -217,13 +274,17 @@
             mapTypeToggle.addEventListener('click', toggleMapType);
         }
         
-        // Unified location handling function
-        function handleLocationAcquired(location) {
-            currentLocation = location;
-            initializeMap(location);
-        }
+        // Call init to set up the application
+        init();
         
-        // Event handler functions
+        // ============================================================
+        // Location Handling
+        // ============================================================
+        
+        /**
+         * Handle the "Use My Location" button click
+         * Uses the browser's geolocation API to get the user's current location
+         */
         function handleUseLocationClick() {
             if (navigator.geolocation) {
                 startImageLoading();
@@ -246,12 +307,20 @@
                 alert("Geolocation is not supported by your browser. Please enter location manually.");
             }
         }
-
+        
+        /**
+         * Handle the "Enter Location" button click
+         * Shows the input field and submit button
+         */
         function handleEnterLocationClick() {
             locationInput.style.display = 'inline-block';
             submitLocationBtn.style.display = 'inline-block';
         }
-
+        
+        /**
+         * Handle the submit location button click
+         * Processes the entered location text (address or coordinates)
+         */
         function handleSubmitLocationClick() {
             const location = locationInput.value;
             if (location.trim() === '') {
@@ -274,6 +343,19 @@
             geocodeAddress(location);
         }
         
+        /**
+         * Unified handler for when a location is acquired (from any source)
+         * @param {Object} location - Object containing lat and lng properties
+         */
+        function handleLocationAcquired(location) {
+            currentLocation = location;
+            initializeMap(location);
+        }
+        
+        /**
+         * Convert an address to geographic coordinates using OpenStreetMap's Nominatim
+         * @param {string} address - The address to geocode
+         */
         function geocodeAddress(address) {
             // Using OpenStreetMap Nominatim for geocoding
             fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
@@ -296,48 +378,25 @@
                     loadingIndicator.style.display = 'none';
                 });
         }
-
-        // Loading indicator function
+        
+        /**
+         * Show the loading indicator and hide other elements
+         */
         function startImageLoading() {
             loadingIndicator.style.display = 'block';
             mapElement.style.display = 'none';
             resultArea.style.display = 'none';
             actionButtons.style.display = 'none';
         }
-
-        // Map type toggle handler
-        function toggleMapType() {
-            if (currentMapType === 'satellite') {
-                // Switch to street map
-                map.removeLayer(satelliteLayer);
-                streetLayer.addTo(map);
-                currentMapType = 'street';
-                mapTypeToggle.textContent = 'Switch to Satellite';
-                
-                // Enable roof detection
-                roofDetectionEnabled = true;
-                roofDetectionStatus.textContent = 'Roof detection enabled';
-                roofDetectionStatus.className = 'status-enabled';
-            } else {
-                // Switch to satellite
-                map.removeLayer(streetLayer);
-                satelliteLayer.addTo(map);
-                currentMapType = 'satellite';
-                mapTypeToggle.textContent = 'Switch to Street Map';
-                
-                // Disable roof detection but keep any existing overlay
-                roofDetectionEnabled = false;
-                roofDetectionStatus.textContent = 'Roof detection disabled in satellite view';
-                roofDetectionStatus.className = 'status-disabled';
-                
-                // We no longer clear the selection when switching to satellite view
-                // This allows viewing the overlay against satellite imagery
-            }
-            
-            roofDetectionStatus.style.display = 'block';
-        }
-
-        // Initialize Leaflet map
+        
+        // ============================================================
+        // Map Initialization and Setup
+        // ============================================================
+        
+        /**
+         * Initialize the Leaflet map with the given location
+         * @param {Object} location - Object containing lat and lng properties
+         */
         function initializeMap(location) {
             // Initialize the map if it doesn't exist
             if (!map) {
@@ -407,6 +466,9 @@
             setupAfterMapLoad();
         }
         
+        /**
+         * Set up map interactions after the map is loaded
+         */
         function setupMapInteractions() {
             // Setup interaction once map is loaded
             map.whenReady(() => {
@@ -429,7 +491,9 @@
             });
         }
         
-        // This function ensures the map is centered properly
+        /**
+         * Center the map view and ensure proper sizing
+         */
         function centerMapView() {
             // Get the center point of our map container
             const containerWidth = mapContainer.offsetWidth;
@@ -444,8 +508,10 @@
             
             console.log("Map centered on container dimensions:", containerWidth, "x", containerHeight);
         }
-
-        // Setup functions
+        
+        /**
+         * Set up the UI after the map has loaded
+         */
         function setupAfterMapLoad() {
             mapElement.style.display = 'block';
             loadingIndicator.style.display = 'none';
@@ -460,50 +526,49 @@
                 // We don't need to do anything special here
             }
         }
-
-        function resetApplication() {
-            // Reset UI
-            mapElement.style.display = 'none';
-            resultArea.style.display = 'none';
-            actionButtons.style.display = 'none';
-            locationControls.style.display = 'block';
-            locationInput.style.display = 'none';
-            submitLocationBtn.style.display = 'none';
-            mapTypeToggle.style.display = 'none';
-            roofDetectionStatus.style.display = 'none';
-            
-            // Remove any existing overlay
-            clearRoofSelection();
-            
-            // Clear data
-            currentLocation = null;
-            selectedRoofPolygon = null;
-            
-            // Reset to street map view by default for next time
-            if (map) {
-                if (currentMapType === 'satellite' && satelliteLayer) {
-                    map.removeLayer(satelliteLayer);
-                    if (streetLayer) streetLayer.addTo(map);
-                    currentMapType = 'street';
-                    roofDetectionEnabled = true;
-                    
-                    // No need to update UI elements as they're hidden now
-                }
+        
+        /**
+         * Toggle between satellite and street map views
+         */
+        function toggleMapType() {
+            if (currentMapType === 'satellite') {
+                // Switch to street map
+                map.removeLayer(satelliteLayer);
+                streetLayer.addTo(map);
+                currentMapType = 'street';
+                mapTypeToggle.textContent = 'Switch to Satellite';
+                
+                // Enable roof detection
+                roofDetectionEnabled = true;
+                roofDetectionStatus.textContent = 'Roof detection enabled';
+                roofDetectionStatus.className = 'status-enabled';
+            } else {
+                // Switch to satellite
+                map.removeLayer(streetLayer);
+                satelliteLayer.addTo(map);
+                currentMapType = 'satellite';
+                mapTypeToggle.textContent = 'Switch to Street Map';
+                
+                // Disable roof detection but keep any existing overlay
+                roofDetectionEnabled = false;
+                roofDetectionStatus.textContent = 'Roof detection disabled in satellite view';
+                roofDetectionStatus.className = 'status-disabled';
+                
+                // We no longer clear the selection when switching to satellite view
+                // This allows viewing the overlay against satellite imagery
             }
+            
+            roofDetectionStatus.style.display = 'block';
         }
         
-        function clearRoofSelection() {
-            // Remove any existing overlay
-            if (roofOverlay) {
-                map.removeLayer(roofOverlay);
-                roofOverlay = null;
-            }
-            
-            selectedRoofPolygon = null;
-            filledPixels = [];
-            resultArea.style.display = 'none';
-        }
-
+        // ============================================================
+        // Roof Detection and Area Calculation
+        // ============================================================
+        
+        /**
+         * Handle a map click event
+         * @param {Object} e - The Leaflet click event
+         */
         function handleMapClick(e) {
             if (isDragging) return; // Don't process if this was a drag
             
@@ -520,6 +585,10 @@
             captureMapAndDetectRoof(clickLatLng);
         }
         
+        /**
+         * Capture the current map view and detect a roof at the clicked location
+         * @param {Object} clickLatLng - Leaflet LatLng object for the click position
+         */
         function captureMapAndDetectRoof(clickLatLng) {
             // Clear any previous selection
             clearRoofSelection();
@@ -559,19 +628,22 @@
             });
         }
         
+        /**
+         * Perform a flood fill algorithm to detect a roof area
+         * @param {number} startX - Starting X coordinate (in pixels)
+         * @param {number} startY - Starting Y coordinate (in pixels)
+         * @param {Object} clickLatLng - Leaflet LatLng object for the click position
+         */
         function fillRoofArea(startX, startY, clickLatLng) {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
             const startPos = (startY * canvas.width + startX) * 4;
-            const startR = data[startPos];
-            const startG = data[startPos + 1];
-            const startB = data[startPos + 2];
             
             // Border color to avoid (c9bdb4 with some tolerance)
             const borderR = 201; // c9 in hex
             const borderG = 189; // bd in hex
             const borderB = 180; // b4 in hex
-            const borderTolerance = 25; // Giving some wiggle room for the border color
+            const borderTolerance = 25; // Tolerance for the border color
             
             const visited = new Array(canvas.width * canvas.height).fill(false);
             const stack = [{x: startX, y: startY}];
@@ -621,6 +693,7 @@
                 // Draw on the temporary canvas
                 tempCtx.fillRect(x, y, 1, 1);
                 
+                // Add adjacent pixels to the stack
                 stack.push({x: x + 1, y});
                 stack.push({x: x - 1, y});
                 stack.push({x, y: y + 1});
@@ -636,6 +709,7 @@
             // We'll expand our search area slightly beyond the bounds of the filled area
             const expandBy = 5; // pixels to expand search by
             
+            // Search the area around the filled region for border pixels
             for (let y = Math.max(0, minY - expandBy); y <= Math.min(canvas.height - 1, maxY + expandBy); y++) {
                 for (let x = Math.max(0, minX - expandBy); x <= Math.min(canvas.width - 1, maxX + expandBy); x++) {
                     // Skip if this pixel is already filled
@@ -674,7 +748,7 @@
                             minY = Math.min(minY, y);
                             maxY = Math.max(maxY, y);
                             
-                            // Draw on the temporary canvas (with a different color if you want to debug)
+                            // Draw on the temporary canvas
                             tempCtx.fillStyle = 'rgba(255, 0, 0, 0.3)'; // Same as interior for production
                             tempCtx.fillRect(x, y, 1, 1);
                         }
@@ -685,6 +759,7 @@
             console.log("Found", borderPixels.length, "border pixels");
             console.log("Total filled pixels:", filledPixels.length);
             
+            // Create and add the overlay if we found filled pixels
             if (filledPixels.length > 0) {
                 // Calculate the bounds
                 const nwPoint = L.point(minX, minY);
@@ -720,14 +795,16 @@
                 roofOverlay.addTo(map);
             }
         }
-
+        
+        /**
+         * Calculate the area of the detected roof
+         */
         function calculateArea() {
             // Get the current map zoom level and center
             const zoom = map.getZoom();
             const center = map.getCenter();
             
-            // Use the correct meters per pixel value based on the OSM table
-            // These values are at the equator and need latitude adjustment
+            // Meters per pixel lookup table based on zoom level (at the equator)
             const metersPerPixelTable = {
                 0: 156543.03,
                 1: 78271.52,
@@ -783,6 +860,59 @@
             // Display the results
             areaResult.textContent = `Estimated Roof Area: ${squareFeet} square feet (${roundedSquareMeters} m²)`;
             resultArea.style.display = 'block';
+        }
+        
+        // ============================================================
+        // Application Control Functions
+        // ============================================================
+        
+        /**
+         * Reset the application to its initial state
+         */
+        function resetApplication() {
+            // Reset UI
+            mapElement.style.display = 'none';
+            resultArea.style.display = 'none';
+            actionButtons.style.display = 'none';
+            locationControls.style.display = 'block';
+            locationInput.style.display = 'none';
+            submitLocationBtn.style.display = 'none';
+            mapTypeToggle.style.display = 'none';
+            roofDetectionStatus.style.display = 'none';
+            
+            // Remove any existing overlay
+            clearRoofSelection();
+            
+            // Clear data
+            currentLocation = null;
+            selectedRoofPolygon = null;
+            
+            // Reset to street map view by default for next time
+            if (map) {
+                if (currentMapType === 'satellite' && satelliteLayer) {
+                    map.removeLayer(satelliteLayer);
+                    if (streetLayer) streetLayer.addTo(map);
+                    currentMapType = 'street';
+                    roofDetectionEnabled = true;
+                    
+                    // No need to update UI elements as they're hidden now
+                }
+            }
+        }
+        
+        /**
+         * Clear the current roof selection and hide results
+         */
+        function clearRoofSelection() {
+            // Remove any existing overlay
+            if (roofOverlay) {
+                map.removeLayer(roofOverlay);
+                roofOverlay = null;
+            }
+            
+            selectedRoofPolygon = null;
+            filledPixels = [];
+            resultArea.style.display = 'none';
         }
     </script>
 </body>
