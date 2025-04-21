@@ -39,22 +39,14 @@
             display: none;
             position: relative;
         }
-        #canvasContainer {
+        #mapOverlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            pointer-events: none;
             z-index: 1000;
-            pointer-events: none;
-        }
-        #roofOverlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
         }
         #resultArea {
             margin-top: 20px;
@@ -87,12 +79,13 @@
             display: none;
             margin-top: 10px;
         }
-        /* Center the zoom control */
-        .leaflet-control-zoom {
-            position: absolute;
+        .leaflet-control-container .leaflet-top {
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .leaflet-control-container .leaflet-left {
             left: 50%;
             transform: translateX(-50%);
-            top: 10px;
         }
         .instruction-text {
             text-align: center;
@@ -124,9 +117,7 @@
         
         <div id="mapContainer" style="position: relative;">
             <div id="map"></div>
-            <div id="canvasContainer">
-                <canvas id="roofOverlay"></canvas>
-            </div>
+            <canvas id="mapOverlay"></canvas>
         </div>
         
         <div id="actionButtons">
@@ -156,12 +147,13 @@
         const locationControls = document.getElementById('locationControls');
         const actionButtons = document.getElementById('actionButtons');
         const mapElement = document.getElementById('map');
-        const roofOverlay = document.getElementById('roofOverlay');
+        const mapOverlay = document.getElementById('mapOverlay');
 
         // Variables
         let map;
         let currentLocation = null;
         let filledPixels = [];
+        let mapImage = null;
         let isDragging = false;
         let overlayCtx = null;
         const DEFAULT_ZOOM = 19;
@@ -288,23 +280,8 @@
                     maxZoom: MAX_ZOOM
                 });
 
-                // Position zoom control at the center-top
-                map.zoomControl.remove(); // Remove default zoom control
-                // Re-add it with new position
-                L.control.zoom({
-                    position: 'topleft'
-                }).addTo(map);
-                
-                // Custom positioning of zoom control
-                setTimeout(() => {
-                    const zoomControl = document.querySelector('.leaflet-control-zoom');
-                    if (zoomControl) {
-                        zoomControl.style.position = 'absolute';
-                        zoomControl.style.left = '50%';
-                        zoomControl.style.transform = 'translateX(-50%)';
-                        zoomControl.style.top = '10px';
-                    }
-                }, 100);
+                // Position zoom control in the center-right
+                map.zoomControl.setPosition('bottomright');
                 
                 // Add ESRI Satellite imagery layer with larger buffer (for more preloading)
                 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -349,16 +326,19 @@
         
         function setupOverlayCanvas() {
             // Make the overlay match the map size
-            roofOverlay.width = mapElement.clientWidth;
-            roofOverlay.height = mapElement.clientHeight;
-            roofOverlay.style.width = '100%';
-            roofOverlay.style.height = '100%';
+            mapOverlay.width = mapElement.clientWidth;
+            mapOverlay.height = mapElement.clientHeight;
+            mapOverlay.style.width = mapElement.clientWidth + 'px';
+            mapOverlay.style.height = mapElement.clientHeight + 'px';
             
             // Get the context for drawing
-            overlayCtx = roofOverlay.getContext('2d');
+            overlayCtx = mapOverlay.getContext('2d');
             
-            // Clear any previous overlay
-            overlayCtx.clearRect(0, 0, roofOverlay.width, roofOverlay.height);
+            // Position the overlay
+            mapOverlay.style.position = 'absolute';
+            mapOverlay.style.top = mapElement.offsetTop + 'px';
+            mapOverlay.style.left = mapElement.offsetLeft + 'px';
+            mapOverlay.style.pointerEvents = 'none'; // Let events pass through to the map
         }
 
         // Setup functions
@@ -367,6 +347,19 @@
             loadingIndicator.style.display = 'none';
             locationControls.style.display = 'none';
             actionButtons.style.display = 'block';
+            
+            // Capture the current map view as an image for roof detection
+            captureMapImage();
+        }
+        
+        function captureMapImage() {
+            // We'll use html2canvas or similar library in a real implementation
+            // For this demo, we'll wait for the map to render fully
+            setTimeout(() => {
+                // In a real implementation, you would capture the map image here
+                // For now, we'll just use the click detection directly
+                console.log("Map image captured and ready for roof detection");
+            }, 1000);
         }
 
         function resetApplication() {
@@ -380,7 +373,7 @@
             
             // Clear overlay
             if (overlayCtx) {
-                overlayCtx.clearRect(0, 0, roofOverlay.width, roofOverlay.height);
+                overlayCtx.clearRect(0, 0, mapOverlay.width, mapOverlay.height);
             }
             
             // Clear data
@@ -390,7 +383,7 @@
         
         function clearRoofSelection() {
             if (overlayCtx) {
-                overlayCtx.clearRect(0, 0, roofOverlay.width, roofOverlay.height);
+                overlayCtx.clearRect(0, 0, mapOverlay.width, mapOverlay.height);
             }
             filledPixels = [];
             resultArea.style.display = 'none';
@@ -410,80 +403,36 @@
         
         // Roof detection using flood fill algorithm
         function detectRoof(startX, startY) {
+            // In a real implementation, we'd need to get the actual pixel data from the map
+            // For this demo, we'll simulate the flood fill with canvas drawing
+            
             // Clear any previous selection
-            if (overlayCtx) {
-                overlayCtx.clearRect(0, 0, roofOverlay.width, roofOverlay.height);
-            }
+            overlayCtx.clearRect(0, 0, mapOverlay.width, mapOverlay.height);
             filledPixels = [];
             
-            // For demonstration purposes, we'll simulate a roof detection
+            // For demonstration purposes, let's create a roof-like shape around the click point
             // In a real implementation, this would be where you analyze the image pixel by pixel
+            const ROOF_SIZE = 60 + Math.floor(Math.random() * 40); // Random roof size for demo
             
-            // Create a roof shape with the flood fill algorithm
-            const roofWidth = 60 + Math.floor(Math.random() * 40);
-            const roofHeight = 50 + Math.floor(Math.random() * 30);
-            
-            // Create points for an irregular polygon to simulate a detected roof
-            const points = [
-                { x: startX, y: startY },
-                { x: startX + roofWidth, y: startY + roofHeight * 0.3 },
-                { x: startX + roofWidth * 1.2, y: startY + roofHeight },
-                { x: startX + roofWidth * 0.5, y: startY + roofHeight * 1.3 },
-                { x: startX - roofWidth * 0.3, y: startY + roofHeight }
-            ];
-            
-            // Draw a red semi-transparent overlay to show the detected roof area
+            // Draw a semi-transparent red overlay to simulate the detected roof
             overlayCtx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+            
+            // Create an irregular polygon shape for the "roof"
             overlayCtx.beginPath();
-            overlayCtx.moveTo(points[0].x, points[0].y);
-            
-            for (let i = 1; i < points.length; i++) {
-                overlayCtx.lineTo(points[i].x, points[i].y);
-            }
-            
+            overlayCtx.moveTo(startX, startY);
+            overlayCtx.lineTo(startX + ROOF_SIZE, startY + ROOF_SIZE/3);
+            overlayCtx.lineTo(startX + ROOF_SIZE*1.2, startY + ROOF_SIZE);
+            overlayCtx.lineTo(startX + ROOF_SIZE/2, startY + ROOF_SIZE*1.3);
+            overlayCtx.lineTo(startX - ROOF_SIZE/3, startY + ROOF_SIZE);
             overlayCtx.closePath();
             overlayCtx.fill();
             
-            // Store filled pixels (for area calculation)
-            // In a real implementation, we would track the actual filled pixels
-            // For this demo, we'll estimate the area of our polygon
-            const area = calculatePolygonArea(points);
+            // In a real implementation, we would count the filled pixels
+            // For now, just estimate a random but realistic roof area
+            const pixelCount = ROOF_SIZE * ROOF_SIZE * 0.75;
             
-            // Simulate filling the detected area
-            for (let y = 0; y < roofOverlay.height; y += 2) {
-                for (let x = 0; x < roofOverlay.width; x += 2) {
-                    if (isPointInPolygon(x, y, points)) {
-                        filledPixels.push({ x, y });
-                    }
-                }
-            }
-            
-            // Calculate the area
-            calculateArea(filledPixels.length);
-        }
-        
-        // Helper function to check if a point is inside a polygon
-        function isPointInPolygon(x, y, polygon) {
-            let inside = false;
-            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-                const xi = polygon[i].x, yi = polygon[i].y;
-                const xj = polygon[j].x, yj = polygon[j].y;
-                
-                const intersect = ((yi > y) !== (yj > y)) &&
-                    (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-                if (intersect) inside = !inside;
-            }
-            return inside;
-        }
-        
-        // Helper function to calculate polygon area
-        function calculatePolygonArea(points) {
-            let area = 0;
-            for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-                area += points[i].x * points[j].y;
-                area -= points[j].x * points[i].y;
-            }
-            return Math.abs(area / 2);
+            // Calculate the area based on the current zoom level and location
+            calculateArea(pixelCount);
         }
 
         // Area calculation functions
