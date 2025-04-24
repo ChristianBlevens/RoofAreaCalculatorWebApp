@@ -7,286 +7,216 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <style>
         body {
-			font-family: Arial, sans-serif;
-			margin: 0;
-			padding: 0;
-			box-sizing: border-box;
-			width: 100%;
-			overflow-x: hidden;
-		}
+            font-family: Arial, sans-serif;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 10px;
+            box-sizing: border-box;
+        }
 
-		.container {
-			display: flex;
-			flex-direction: column;
-			gap: 20px;
-			width: 100%;
-			max-width: 800px;
-			margin: 0 auto;
-			padding: 10px;
-			box-sizing: border-box;
-		}
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1, h2, h3 {
+            text-align: center;
+            width: 100%;
+        }
+        
+        .options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            width: 100%;
+        }
 
-		h1, h2, h3 {
-			text-align: center;
-			width: 100%;
-			margin: 10px 0;
-		}
+        button {
+            padding: 10px 15px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            min-width: 120px;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background-color: #3367d6;
+        }
+        
+        #resetButton {
+            margin-top: 10px;
+            background-color: #f44336;
+        }
+        
+        #resetButton:hover {
+            background-color: #d32f2f;
+        }
+        
+        #clearSelection {
+            background-color: #FFA500;
+        }
 
-		.options {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 10px;
-			justify-content: center;
-			width: 100%;
-		}
+        #map {
+            height: 60vh;
+            width: 100%;
+            border: 1px solid #ccc;
+            display: none;
+            max-height: 500px;
+        }
+        
+        #mapContainer {
+            position: relative;
+            width: 100%;
+            height: 60vh;
+            max-height: 500px;
+            margin: 0 auto;
+        }
 
-		button {
-			padding: 10px 15px;
-			background-color: #4285f4;
-			color: white;
-			border: none;
-			border-radius: 4px;
-			cursor: pointer;
-			min-width: 120px;
-			margin: 5px;
-			font-size: 14px;
-			-webkit-tap-highlight-color: transparent;
-		}
+        #mapTypeToggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background-color: white;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-weight: bold;
+            color: #333;
+            display: none;
+            font-size: 14px;
+        }
+        
+        #mapTypeToggle:hover {
+            background-color: #f4f4f4;
+        }
+        
+        #roofDetectionStatus {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            z-index: 1000;
+            background-color: white;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 12px;
+            display: none;
+            max-width: 130px;
+        }
 
-		button:hover {
-			background-color: #3367d6;
-		}
+        .status-enabled {
+            background-color: #dff0d8 !important;
+            color: #3c763d;
+        }
+        
+        .status-disabled {
+            background-color: #f2dede !important;
+            color: #a94442;
+        }
 
-		#resetButton {
-			margin-top: 10px;
-			background-color: #f44336;
-		}
+        #locationInput {
+            padding: 10px;
+            width: 100%;
+            max-width: 300px;
+            display: none;
+            margin: 10px auto;
+            box-sizing: border-box;
+        }
+        
+        #submitLocation {
+            display: none;
+            margin: 10px auto;
+        }
 
-		#resetButton:hover {
-			background-color: #d32f2f;
-		}
+        #resultArea {
+            margin-top: 20px;
+            display: none;
+            padding: 15px;
+            background-color: #f1f8e9;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
 
-		#clearSelection {
-			background-color: #FFA500;
-		}
+        #loadingIndicator {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            width: 100%;
+        }
 
-		#map {
-			height: 60vh;
-			width: 100%;
-			border: 1px solid #ccc;
-			display: none;
-			max-height: 500px;
-			position: relative; /* Important for html2canvas */
-			transform: translateZ(0); /* Force hardware acceleration */
-			-webkit-transform: translateZ(0);
-			-webkit-backface-visibility: hidden; /* Prevent flickering */
-			backface-visibility: hidden;
-		}
+        #actionButtons {
+            display: none;
+            margin-top: 10px;
+            width: 100%;
+            text-align: center;
+        }
 
-		#mapContainer {
-			position: relative;
-			width: 100%;
-			height: 60vh;
-			max-height: 500px;
-			margin: 0 auto;
-			overflow: hidden; /* Prevent map controls from causing scrollbars */
-		}
+        .instruction-text {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+            width: 100%;
+        }
 
-		#mapTypeToggle {
-			position: absolute;
-			top: 10px;
-			right: 10px;
-			z-index: 1000;
-			background-color: white;
-			border: 2px solid rgba(0,0,0,0.2);
-			border-radius: 4px;
-			padding: 6px 10px;
-			font-weight: bold;
-			color: #333;
-			display: none;
-			font-size: 14px;
-			touch-action: manipulation; /* Improve touch behavior */
-		}
+        #locationControls {
+            width: 100%;
+            text-align: center;
+        }
 
-		#mapTypeToggle:hover {
-			background-color: #f4f4f4;
-		}
+        #locationControls div {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
 
-		#roofDetectionStatus {
-			position: absolute;
-			top: 50px;
-			right: 10px;
-			z-index: 1000;
-			background-color: white;
-			border: 2px solid rgba(0,0,0,0.2);
-			border-radius: 4px;
-			padding: 6px 10px;
-			font-size: 12px;
-			display: none;
-			max-width: 130px;
-		}
-
-		.status-enabled {
-			background-color: #dff0d8 !important;
-			color: #3c763d;
-		}
-
-		.status-disabled {
-			background-color: #f2dede !important;
-			color: #a94442;
-		}
-
-		#locationInput {
-			padding: 10px;
-			width: 100%;
-			max-width: 300px;
-			display: none;
-			margin: 10px auto;
-			box-sizing: border-box;
-			font-size: 16px; /* Prevent zoom on mobile */
-		}
-
-		#submitLocation {
-			display: none;
-			margin: 10px auto;
-		}
-
-		#resultArea {
-			margin-top: 20px;
-			display: none;
-			padding: 15px;
-			background-color: #f1f8e9;
-			border-radius: 4px;
-			width: 100%;
-			box-sizing: border-box;
-		}
-
-		#loadingIndicator {
-			display: none;
-			text-align: center;
-			padding: 20px;
-			width: 100%;
-		}
-
-		#actionButtons {
-			display: none;
-			margin-top: 10px;
-			width: 100%;
-			text-align: center;
-		}
-
-		.instruction-text {
-			text-align: center;
-			font-weight: bold;
-			margin-bottom: 10px;
-			width: 100%;
-		}
-
-		#locationControls {
-			width: 100%;
-			text-align: center;
-		}
-
-		#locationControls div {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-		}
-
-		/* To ensure proper html2canvas capture */
-		.leaflet-control-container, .leaflet-top, .leaflet-bottom {
-			z-index: 800 !important; /* Lower than default to prevent issues with html2canvas */
-		}
-
-		.leaflet-pane {
-			z-index: 400 !important; /* Ensure proper stacking for canvas capture */
-		}
-
-		/* Prevent map controls from interfering with canvas capture */
-		.leaflet-control {
-			pointer-events: auto !important;
-		}
-
-		@media (max-width: 768px) {
-			body {
-				padding: 5px;
-			}
-			
-			h1 {
-				font-size: 1.5rem;
-			}
-			
-			h2 {
-				font-size: 1.2rem;
-			}
-			
-			button {
-				padding: 8px 12px;
-				min-width: auto;
-				width: calc(50% - 10px);
-				font-size: 14px;
-				margin: 5px;
-			}
-			
-			#mapTypeToggle, #roofDetectionStatus {
-				font-size: 11px;
-				padding: 4px 8px;
-			}
-			
-			#roofDetectionStatus {
-				top: 45px;
-				max-width: 110px;
-			}
-			
-			#mapContainer, #map {
-				height: 50vh;
-				min-height: 300px;
-			}
-			
-			.options {
-				justify-content: space-between;
-			}
-			
-			.container {
-				padding: 5px;
-			}
-		}
-
-		@media (max-width: 480px) {
-			button {
-				width: 100%;
-				margin: 3px 0;
-			}
-			
-			#mapContainer, #map {
-				height: 45vh;
-				min-height: 250px;
-			}
-			
-			.options {
-				flex-direction: column;
-			}
-			
-			h1 {
-				font-size: 1.3rem;
-			}
-			
-			h2 {
-				font-size: 1.1rem;
-			}
-		}
-
-		/* Fix for iOS Safari rendering issues */
-		@supports (-webkit-touch-callout: none) {
-			#map {
-				-webkit-transform: translateZ(0);
-				-webkit-backface-visibility: hidden;
-			}
-			
-			.leaflet-container {
-				-webkit-tap-highlight-color: transparent;
-			}
-		}
+        @media (max-width: 600px) {
+            body {
+                padding: 5px;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            h2 {
+                font-size: 1.2rem;
+            }
+            
+            button {
+                padding: 8px 12px;
+                min-width: 100px;
+                font-size: 14px;
+            }
+            
+            #mapTypeToggle, #roofDetectionStatus {
+                font-size: 11px;
+                padding: 4px 8px;
+            }
+            
+            #roofDetectionStatus {
+                top: 45px;
+                max-width: 110px;
+            }
+            
+            #mapContainer, #map {
+                height: 50vh;
+            }
+            
+            .options {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -575,63 +505,48 @@
         }
 
         function handleMapClick(e) {
-			if (isDragging) return;
-			if (!roofDetectionEnabled) {
-				alert("Roof detection is only available in street map view. Please switch to street map to detect roofs.");
-				return;
-			}
-			const clickLatLng = e.latlng;
-			clearRoofSelection();
-			
-			const mapSize = map.getSize();
-			const clickPoint = map.latLngToContainerPoint(clickLatLng);
-			
-			// Make sure we're working with the actual rendered size
-			const mapElement = document.getElementById('map');
-			const computedStyle = window.getComputedStyle(mapElement);
-			const actualWidth = parseFloat(computedStyle.width);
-			const actualHeight = parseFloat(computedStyle.height);
-			
-			// Force any ongoing rendering to complete before capture
-			setTimeout(() => {
-				html2canvas(mapElement, {
-					useCORS: true,
-					allowTaint: true,
-					backgroundColor: null,
-					scale: window.devicePixelRatio || 1, // Account for device pixel ratio
-					logging: false,
-					width: mapSize.x,
-					height: mapSize.y,
-					// Improved options for mobile
-					ignoreElements: (element) => {
-						// Ignore UI elements that might interfere with detection
-						return element.classList && 
-							   (element.classList.contains('leaflet-control-container') ||
-								element.classList.contains('leaflet-control-zoom'));
-					}
-				}).then(function(capturedCanvas) {
-					canvas = document.createElement('canvas');
-					canvas.width = capturedCanvas.width;
-					canvas.height = capturedCanvas.height;
-					ctx = canvas.getContext('2d');
-					ctx.drawImage(capturedCanvas, 0, 0);
-					
-					const startX = Math.round(clickPoint.x);
-					const startY = Math.round(clickPoint.y);
-					
-					fillRoofArea(startX, startY, clickLatLng);
-					
-					if (filledPixels && filledPixels.length > 0) {
-						calculateArea();
-					} else {
-						alert("Could not detect a roof at this location. Try clicking on a more distinct roof area.");
-					}
-				}).catch(function(error) {
-					console.error("Canvas capture error:", error);
-					alert("An error occurred while processing the roof detection. Please try again.");
-				});
-			}, 100); // Small delay to ensure map rendering is complete
-		}
+            if (isDragging) return;
+
+            if (!roofDetectionEnabled) {
+                alert("Roof detection is only available in street map view. Please switch to street map to detect roofs.");
+                return;
+            }
+
+            const clickLatLng = e.latlng;
+            clearRoofSelection();
+            
+            const mapSize = map.getSize();
+            const clickPoint = map.latLngToContainerPoint(clickLatLng);
+            
+            html2canvas(document.getElementById('map'), {
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: null,
+                scale: 1,
+                logging: false,
+                width: mapSize.x,
+                height: mapSize.y
+            }).then(function(capturedCanvas) {
+                canvas = document.createElement('canvas');
+                canvas.width = capturedCanvas.width;
+                canvas.height = capturedCanvas.height;
+                ctx = canvas.getContext('2d');
+                ctx.drawImage(capturedCanvas, 0, 0);
+                
+                const startX = Math.round(clickPoint.x);
+                const startY = Math.round(clickPoint.y);
+                
+                fillRoofArea(startX, startY, clickLatLng);
+                
+                if (filledPixels.length > 0) {
+                    calculateArea();
+                } else {
+                    alert("Could not detect a roof at this location. Try clicking on a more distinct roof area.");
+                }
+            }).catch(function(error) {
+                alert("An error occurred while processing the roof detection. Please try again.");
+            });
+        }
 
         function fillRoofArea(startX, startY, clickLatLng) {
 			const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
