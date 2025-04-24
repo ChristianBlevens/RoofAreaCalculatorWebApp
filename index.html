@@ -575,48 +575,69 @@
         }
 
         function handleMapClick(e) {
-            if (isDragging) return;
-
-            if (!roofDetectionEnabled) {
-                alert("Roof detection is only available in street map view. Please switch to street map to detect roofs.");
-                return;
-            }
-
-            const clickLatLng = e.latlng;
-            clearRoofSelection();
-            
-            const mapSize = map.getSize();
-            const clickPoint = map.latLngToContainerPoint(clickLatLng);
-            
-            html2canvas(document.getElementById('map'), {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: null,
-                scale: 1,
-                logging: false,
-                width: mapSize.x,
-                height: mapSize.y
-            }).then(function(capturedCanvas) {
-                canvas = document.createElement('canvas');
-                canvas.width = capturedCanvas.width;
-                canvas.height = capturedCanvas.height;
-                ctx = canvas.getContext('2d');
-                ctx.drawImage(capturedCanvas, 0, 0);
-                
-                const startX = Math.round(clickPoint.x);
-                const startY = Math.round(clickPoint.y);
-                
-                fillRoofArea(startX, startY, clickLatLng);
-                
-                if (filledPixels.length > 0) {
-                    calculateArea();
-                } else {
-                    alert("Could not detect a roof at this location. Try clicking on a more distinct roof area.");
-                }
-            }).catch(function(error) {
-                alert("An error occurred while processing the roof detection. Please try again.");
-            });
-        }
+			if (isDragging) return;
+			if (!roofDetectionEnabled) {
+				alert("Roof detection is only available in street map view. Please switch to street map to detect roofs.");
+				return;
+			}
+			const clickLatLng = e.latlng;
+			clearRoofSelection();
+			
+			const mapSize = map.getSize();
+			const clickPoint = map.latLngToContainerPoint(clickLatLng);
+			
+			// Get the actual map element
+			const mapElement = document.getElementById('map');
+			
+			// Use the exact same dimensions as the map reports
+			html2canvas(mapElement, {
+				useCORS: true,
+				allowTaint: true,
+				backgroundColor: null,
+				scale: 1, // Keep scale at 1 to prevent offset issues
+				logging: false,
+				width: mapSize.x,
+				height: mapSize.y,
+				// The key fix: ensure full height capture
+				onclone: function(clonedDoc) {
+					// Ensure the cloned element has the right dimensions
+					const clonedMap = clonedDoc.getElementById('map');
+					if (clonedMap) {
+						// Force the cloned map to match exactly the dimensions of the original
+						clonedMap.style.height = mapSize.y + 'px';
+						clonedMap.style.width = mapSize.x + 'px';
+						
+						// Force all child elements to be visible
+						const mapPanes = clonedMap.querySelectorAll('.leaflet-pane');
+						mapPanes.forEach(pane => {
+							pane.style.height = '100%';
+							pane.style.bottom = '0';
+							pane.style.position = 'absolute';
+						});
+					}
+				}
+			}).then(function(capturedCanvas) {
+				canvas = document.createElement('canvas');
+				canvas.width = capturedCanvas.width;
+				canvas.height = capturedCanvas.height;
+				ctx = canvas.getContext('2d');
+				ctx.drawImage(capturedCanvas, 0, 0);
+				
+				const startX = Math.round(clickPoint.x);
+				const startY = Math.round(clickPoint.y);
+				
+				fillRoofArea(startX, startY, clickLatLng);
+				
+				if (filledPixels && filledPixels.length > 0) {
+					calculateArea();
+				} else {
+					alert("Could not detect a roof at this location. Try clicking on a more distinct roof area.");
+				}
+			}).catch(function(error) {
+				console.error("Canvas capture error:", error);
+				alert("An error occurred while processing the roof detection. Please try again.");
+			});
+		}
 
         function fillRoofArea(startX, startY, clickLatLng) {
 			const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
