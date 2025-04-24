@@ -581,7 +581,12 @@
 			// First pass: Fill pixels matching the target color
 			while (stack.length > 0) {
 				const {x, y} = stack.pop();
+				
+				// Skip processing if outside canvas or already visited
 				if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height || visited[y * canvas.width + x]) continue;
+				
+				// Skip pixels at the border of the shape (implemented as a 1-pixel internal border)
+				if (x === 0 || x === canvas.width - 1 || y === 0 || y === canvas.height - 1) continue;
 				
 				const pos = (y * canvas.width + x) * 4;
 				const r = data[pos];
@@ -624,7 +629,11 @@
 
 			for (let y = Math.max(0, minY - expandBy); y <= Math.min(canvas.height - 1, maxY + expandBy); y++) {
 				for (let x = Math.max(0, minX - expandBy); x <= Math.min(canvas.width - 1, maxX + expandBy); x++) {
+					// Skip processing if already visited
 					if (visited[y * canvas.width + x]) continue;
+					
+					// Skip pixels at the border of the image (1-pixel internal border)
+					if (x === 0 || x === canvas.width - 1 || y === 0 || y === canvas.height - 1) continue;
 					
 					const pos = (y * canvas.width + x) * 4;
 					const r = data[pos];
@@ -698,6 +707,9 @@
 					const relativeY = y - minY;
 					if (relativeY < 0 || relativeY >= xRanges.length) continue;
 					
+					// Skip pixels at the border of the image (1-pixel internal border)
+					if (y === 0 || y === canvas.height - 1) continue;
+					
 					const range = xRanges[relativeY];
 					if (range.min === Infinity || range.max === -Infinity) continue;
 					
@@ -705,12 +717,23 @@
 					let gapStartX = -1;
 					
 					for (let x = range.min; x <= range.max; x++) {
+						// Skip pixels at the border of the image (1-pixel internal border)
+						if (x === 0 || x === canvas.width - 1) {
+							if (inGap) {
+								inGap = false;
+								gapStartX = -1;
+							}
+							continue;
+						}
+						
 						const isVisited = visited[y * canvas.width + x];
 						
 						if (isVisited && inGap) {
 							// End of gap
 							if (gapStartX !== -1 && x - gapStartX <= maxGapSize) { 
 								for (let gx = gapStartX; gx < x; gx++) {
+									// Skip pixels at the border
+									if (gx === 0 || gx === canvas.width - 1) continue;
 									horizontalGaps.add(`${gx},${y}`);
 								}
 							}
@@ -729,6 +752,9 @@
 					const relativeX = x - minX;
 					if (relativeX < 0 || relativeX >= yRanges.length) continue;
 					
+					// Skip pixels at the border of the image (1-pixel internal border)
+					if (x === 0 || x === canvas.width - 1) continue;
+					
 					const range = yRanges[relativeX];
 					if (range.min === Infinity || range.max === -Infinity) continue;
 					
@@ -736,12 +762,23 @@
 					let gapStartY = -1;
 					
 					for (let y = range.min; y <= range.max; y++) {
+						// Skip pixels at the border of the image (1-pixel internal border)
+						if (y === 0 || y === canvas.height - 1) {
+							if (inGap) {
+								inGap = false;
+								gapStartY = -1;
+							}
+							continue;
+						}
+						
 						const isVisited = visited[y * canvas.width + x];
 						
 						if (isVisited && inGap) {
 							// End of gap
 							if (gapStartY !== -1 && y - gapStartY <= maxGapSize) { 
 								for (let gy = gapStartY; gy < y; gy++) {
+									// Skip pixels at the border
+									if (gy === 0 || gy === canvas.height - 1) continue;
 									verticalGaps.add(`${x},${gy}`);
 								}
 							}
@@ -760,6 +797,8 @@
 				for (const coordStr of horizontalGaps) {
 					if (verticalGaps.has(coordStr)) {
 						const [x, y] = coordStr.split(',').map(Number);
+						// Skip pixels at the border
+						if (x === 0 || x === canvas.width - 1 || y === 0 || y === canvas.height - 1) continue;
 						confirmedGaps.push({x, y});
 					}
 				}
