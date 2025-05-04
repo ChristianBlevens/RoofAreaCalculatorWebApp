@@ -933,47 +933,34 @@
 		}
 		
         function calculateArea() {
-            const zoom = map.getZoom();
-            const center = map.getCenter();
-
-            const metersPerPixelTable = {
-                0: 156543.03,
-                1: 78271.52,
-                2: 39135.76,
-                3: 19567.88,
-                4: 9783.94,
-                5: 4891.97,
-                6: 2445.98,
-                7: 1222.99,
-                8: 611.50,
-                9: 305.75,
-                10: 152.87,
-                11: 76.44,
-                12: 38.22,
-                13: 19.11,
-                14: 9.55,
-                15: 4.78,
-                16: 2.39,
-                17: 1.19,
-                18: 0.60,
-                19: 0.299,
-                20: 0.149
-            };
-
-            let metersPerPixel = metersPerPixelTable[Math.round(zoom)] || 0.299;
-
-            const latitudeCorrection = Math.cos(center.lat * Math.PI / 180);
-            metersPerPixel = metersPerPixel * latitudeCorrection;
-
-            const squareMeters = filledPixels.length * (metersPerPixel * metersPerPixel);
-            const squareFeet = Math.round(squareMeters * 10.7639);
-            const roundedSquareMeters = Math.round(squareMeters * 100) / 100;
-
-            areaResult.textContent = `Estimated Roof Area: ${squareFeet} square feet (${roundedSquareMeters} m²)`;
-            resultArea.style.display = 'block';
-
-            resultArea.scrollIntoView({ behavior: 'smooth' });
-        }
+			const zoom = map.getZoom();
+			const center = map.getCenter();
+			
+			// Earth's equatorial radius in meters
+			const EARTH_RADIUS = 6378137;
+			
+			// Earth's equatorial circumference in meters
+			const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS;
+			
+			// Calculate meters per pixel using the accurate OSM formula
+			// This handles fractional zoom levels correctly
+			const latRadians = center.lat * Math.PI / 180;
+			const metersPerPixel = EARTH_CIRCUMFERENCE * Math.cos(latRadians) / (256 * Math.pow(2, zoom));
+			
+			// Calculate area in square meters
+			const squareMeters = filledPixels.length * (metersPerPixel * metersPerPixel);
+			
+			// Convert to square feet and round appropriately
+			const squareFeet = Math.round(squareMeters * 10.7639);
+			const roundedSquareMeters = Math.round(squareMeters * 100) / 100;
+			
+			// Display the results
+			areaResult.textContent = `Estimated Roof Area: ${squareFeet} square feet (${roundedSquareMeters} m²)`;
+			resultArea.style.display = 'block';
+			
+			// Scroll to show the results
+			resultArea.scrollIntoView({ behavior: 'smooth' });
+		}
 
         function resetApplication() {
             mapElement.style.display = 'none';
